@@ -10,7 +10,7 @@ import { classifyMediaFromContext } from './lib/media';
 import type { SlideModel } from './schemas/slide';
 import { compilerStages, deckRowSchema, rollingWindowRule, designFormulaSystem } from './deckCompilerSpec';
 import { ingestDeckRows } from './compiler';
-import { compileFromAirtable, getAirtableSnapshot } from './airtable';
+import { compileFromAirtable, getAirtableSnapshot, getGeneratedPresentation } from './airtable';
 import { generateFromAirtable } from './generate';
 
 const execFileAsync = promisify(execFile);
@@ -252,6 +252,15 @@ app.post('/api/generate/from-airtable', async (req, res) => {
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate from Airtable.' });
+  }
+});
+
+app.get('/api/generated/from-airtable', async (req, res) => {
+  try {
+    const presentation = await getGeneratedPresentation(typeof req.query.versionId === 'string' ? req.query.versionId : undefined);
+    return res.json(presentation);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load generated presentation from Airtable.' });
   }
 });
 

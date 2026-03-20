@@ -46,16 +46,43 @@ type CompiledSlide = {
 type CompileResult = { rowCount: number; validRowCount: number; invalidRows: Array<{ rowNumber: number; missing: string[]; valid: boolean }>; compiledSlides: CompiledSlide[]; versionId?: string };
 type GenerateResult = { runId: string; versionId: string; generatedCount: number; model: string; engine?: string };
 
+type GeneratedSlide = {
+  id: string;
+  name: string;
+  status: string;
+  promptSummary: string;
+  layoutJson: string;
+  notes: string;
+  model: string;
+  previewImageUrl: string;
+  deckVersionIds: string[];
+  slideRowIds: string[];
+  renderRunIds: string[];
+  iterationNumber: number;
+  createdTime?: string;
+  slideNumber: number;
+};
+
+type GeneratedPresentation = {
+  versionId: string;
+  runCount: number;
+  generatedCount: number;
+  generatedSlides: GeneratedSlide[];
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 function App() {
   const [spec, setSpec] = useState<CompilerSpec | null>(null);
   const [snapshot, setSnapshot] = useState<AirtableSnapshot | null>(null);
   const [compiled, setCompiled] = useState<CompileResult | null>(null);
+  const [presentation, setPresentation] = useState<GeneratedPresentation | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<string>('');
+  const [selectedGeneratedId, setSelectedGeneratedId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [loadingPresentation, setLoadingPresentation] = useState(false);
   const [generateResult, setGenerateResult] = useState<GenerateResult | null>(null);
 
   useEffect(() => {
@@ -86,11 +113,50 @@ function App() {
       .finally(() => setBusy(false));
   }, [selectedVersion]);
 
+  useEffect(() => {
+    if (!selectedVersion) return;
+    setLoadingPresentation(true);
+    fetch(`${API_BASE}/api/generated/from-airtable?versionId=${encodeURIComponent(selectedVersion)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        setPresentation(data);
+        setSelectedGeneratedId((current) => current && data.generatedSlides.some((slide: GeneratedSlide) => slide.id === current)
+          ? current
+          : data.generatedSlides[0]?.id || '');
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load generated presentation'))
+      .finally(() => setLoadingPresentation(false));
+  }, [selectedVersion]);
+
   const selectedDeck = useMemo(() => {
     if (!snapshot || !selectedVersion) return null;
     const version = snapshot.versions.find((item) => item.id === selectedVersion);
     return snapshot.decks.find((deck) => version?.deckIds.includes(deck.id)) || null;
   }, [snapshot, selectedVersion]);
+
+  const selectedGeneratedSlide = useMemo(() => {
+    if (!presentation) return null;
+    return presentation.generatedSlides.find((slide) => slide.id === selectedGeneratedId) || presentation.generatedSlides[0] || null;
+  }, [presentation, selectedGeneratedId]);
+
+  const selectedCompiledSlide = useMemo(() => {
+    if (!compiled || !selectedGeneratedSlide) return null;
+    return compiled.compiledSlides.find((slide) => slide.slideNumber === selectedGeneratedSlide.slideNumber) || null;
+  }, [compiled, selectedGeneratedSlide]);
+
+  const selectedPromptLines = useMemo(() => {
+    return (selectedGeneratedSlide?.promptSummary || '').split('\n').filter(Boolean);
+  }, [selectedGeneratedSlide]);
+
+  async function refreshPresentation(versionId: string) {
+    const data = await fetch(`${API_BASE}/api/generated/from-airtable?versionId=${encodeURIComponent(versionId)}`).then((r) => r.json());
+    if (data.error) throw new Error(data.error);
+    setPresentation(data);
+    setSelectedGeneratedId((current) => current && data.generatedSlides.some((slide: GeneratedSlide) => slide.id === current)
+      ? current
+      : data.generatedSlides[0]?.id || '');
+  }
 
   async function handleGenerate() {
     if (!selectedVersion) return;
@@ -105,13 +171,21 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to generate');
       setGenerateResult(data);
-      const refreshed = await fetch(`${API_BASE}/api/compiler/from-airtable?versionId=${encodeURIComponent(selectedVersion)}`).then((r) => r.json());
-      setCompiled(refreshed);
+      const refreshedCompiled = await fetch(`${API_BASE}/api/compiler/from-airtable?versionId=${encodeURIComponent(selectedVersion)}`).then((r) => r.json());
+      setCompiled(refreshedCompiled);
+      await refreshPresentation(selectedVersion);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate');
     } finally {
       setGenerating(false);
     }
+  }
+
+  function moveSelected(delta: number) {
+    if (!presentation?.generatedSlides.length || !selectedGeneratedSlide) return;
+    const index = presentation.generatedSlides.findIndex((slide) => slide.id === selectedGeneratedSlide.id);
+    const next = presentation.generatedSlides[index + delta];
+    if (next) setSelectedGeneratedId(next.id);
   }
 
   return (
@@ -141,7 +215,7 @@ function App() {
           <article><span>Decks</span><strong>{snapshot?.decks.length || 0}</strong><small>available in Airtable</small></article>
           <article><span>Versions</span><strong>{snapshot?.versions.length || 0}</strong><small>compiler-ready versions</small></article>
           <article><span>Slide Rows</span><strong>{snapshot?.slideRows.length || 0}</strong><small>structured source rows</small></article>
-          <article><span>Reference Styles</span><strong>{snapshot?.referenceStyles.length || 0}</strong><small>linked visual anchors</small></article>
+          <article><span>Generated Slides</span><strong>{presentation?.generatedCount || 0}</strong><small>currently viewable in the deck viewer</small></article>
         </section>
 
         <section className="principles">
@@ -161,6 +235,91 @@ function App() {
             </div>
             <p className="media-note">{selectedDeck?.description || spec?.summary}</p>
             {generateResult ? <p className="media-note">Last run: {generateResult.runId} · {generateResult.generatedCount} generated slide records written using {generateResult.engine || 'nano-banana-2'} / {generateResult.model}.</p> : null}
+          </div>
+        </section>
+
+        <section className="viewer-shell">
+          <div className="viewer-header">
+            <div>
+              <p className="eyebrow">Deck review mode</p>
+              <h2>Generated presentation viewer</h2>
+            </div>
+            <div className="viewer-toolbar">
+              <span className="status-pill subtle">{loadingPresentation ? 'Loading presentation…' : `${presentation?.generatedCount || 0} slides viewable`}</span>
+              <button onClick={() => moveSelected(-1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[0]?.id === selectedGeneratedSlide.id}>Previous</button>
+              <button onClick={() => moveSelected(1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[presentation.generatedSlides.length - 1]?.id === selectedGeneratedSlide.id}>Next</button>
+            </div>
+          </div>
+
+          <div className="viewer-grid">
+            <aside className="filmstrip">
+              {(presentation?.generatedSlides || []).map((slide) => (
+                <button
+                  key={slide.id}
+                  className={`thumb-card ${slide.id === selectedGeneratedId ? 'active' : ''}`}
+                  onClick={() => setSelectedGeneratedId(slide.id)}
+                >
+                  {slide.previewImageUrl ? <img src={slide.previewImageUrl} alt={slide.name} /> : <div className="thumb-placeholder">No preview</div>}
+                  <div className="thumb-meta">
+                    <strong>{slide.slideNumber || '—'}</strong>
+                    <span>{slide.status}</span>
+                  </div>
+                </button>
+              ))}
+            </aside>
+
+            <section className="presentation-stage">
+              <div className="stage-topline">
+                <div>
+                  <p className="eyebrow">Slide focus</p>
+                  <h3>{selectedGeneratedSlide?.name || 'No generated slide selected'}</h3>
+                </div>
+                {selectedGeneratedSlide ? <span className="stage-counter">Slide {selectedGeneratedSlide.slideNumber}</span> : null}
+              </div>
+
+              <div className="stage-canvas-wrap">
+                {selectedGeneratedSlide?.previewImageUrl ? (
+                  <img className="stage-canvas" src={selectedGeneratedSlide.previewImageUrl} alt={selectedGeneratedSlide.name} />
+                ) : (
+                  <div className="stage-empty">Generate a version to start viewing the presentation.</div>
+                )}
+              </div>
+            </section>
+
+            <aside className="review-panel">
+              <div className="review-card">
+                <p className="eyebrow">Generation metadata</p>
+                <h3>Review context</h3>
+                <ul className="plain-list compact">
+                  <li><strong>Status:</strong> {selectedGeneratedSlide?.status || '—'}</li>
+                  <li><strong>Model:</strong> {selectedGeneratedSlide?.model || generateResult?.model || '—'}</li>
+                  <li><strong>Iteration:</strong> {selectedGeneratedSlide?.iterationNumber || '—'}</li>
+                  <li><strong>Render runs:</strong> {selectedGeneratedSlide?.renderRunIds.length || 0}</li>
+                </ul>
+              </div>
+
+              <div className="review-card">
+                <p className="eyebrow">Prompt summary</p>
+                <h3>What drove this slide</h3>
+                <ul className="plain-list compact">
+                  {selectedPromptLines.length ? selectedPromptLines.map((line, index) => <li key={index}>{line}</li>) : <li>No prompt summary found.</li>}
+                </ul>
+              </div>
+
+              <div className="review-card">
+                <p className="eyebrow">Compiled slide plan</p>
+                <h3>Source row translated</h3>
+                {selectedCompiledSlide ? (
+                  <ul className="plain-list compact">
+                    <li><strong>Title:</strong> {selectedCompiledSlide.title}</li>
+                    <li><strong>Template:</strong> {selectedCompiledSlide.targetTemplate}</li>
+                    <li><strong>Intent:</strong> {selectedCompiledSlide.intent}</li>
+                    <li><strong>Section:</strong> {selectedCompiledSlide.section}</li>
+                    <li><strong>References:</strong> {(selectedCompiledSlide.linkedReferences || []).map((ref) => ref.name).join(' · ') || '—'}</li>
+                  </ul>
+                ) : <p className="media-note">No compiled plan matched this generated slide.</p>}
+              </div>
+            </aside>
           </div>
         </section>
 

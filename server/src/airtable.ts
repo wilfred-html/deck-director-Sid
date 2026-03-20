@@ -124,3 +124,57 @@ export async function compileFromAirtable(versionId?: string) {
     compiledSlides,
   };
 }
+
+export async function getGeneratedPresentation(versionId?: string) {
+  if (!AIRTABLE_TOKEN) throw new Error('Airtable token not configured on the server.');
+
+  const snapshot = await getAirtableSnapshot();
+  const targetVersionId = versionId || snapshot.versions[0]?.id;
+  if (!targetVersionId) {
+    return {
+      versionId: '',
+      runCount: 0,
+      generatedCount: 0,
+      generatedSlides: [],
+    };
+  }
+
+  const [generatedSlides, renderRuns] = await Promise.all([
+    listAll('Generated Slides'),
+    listAll('Render Runs'),
+  ]);
+
+  const filteredRenderRuns = renderRuns.filter((record) => (record.fields['Deck Version'] || []).includes(targetVersionId));
+  const filteredSlides = generatedSlides
+    .filter((record) => (record.fields['Deck Version'] || []).includes(targetVersionId))
+    .map((record) => {
+      const rawName = record.fields['Generated Slide Name'] || 'Generated Slide';
+      const slideRowId = (record.fields['Slide Row'] || [])[0];
+      const matchedRow = snapshot.slideRows.find((row) => row.id === slideRowId);
+      const slideNumber = Number(matchedRow?.slide_number || String(rawName).match(/Slide\s+(\d+)/i)?.[1] || 0);
+      return {
+        id: record.id,
+        name: rawName,
+        status: record.fields.Status || '',
+        promptSummary: record.fields['Prompt Summary'] || '',
+        layoutJson: record.fields['Layout JSON'] || '',
+        notes: record.fields.Notes || '',
+        model: record.fields.Model || '',
+        previewImageUrl: record.fields['Preview Image']?.[0]?.url || '',
+        deckVersionIds: record.fields['Deck Version'] || [],
+        slideRowIds: record.fields['Slide Row'] || [],
+        renderRunIds: record.fields['Render Run'] || [],
+        iterationNumber: Number(record.fields['Iteration Number'] || 1),
+        createdTime: record.fields['Created Time'] || '',
+        slideNumber,
+      };
+    })
+    .sort((a, b) => a.slideNumber - b.slideNumber || a.name.localeCompare(b.name));
+
+  return {
+    versionId: targetVersionId,
+    runCount: filteredRenderRuns.length,
+    generatedCount: filteredSlides.length,
+    generatedSlides: filteredSlides,
+  };
+}
