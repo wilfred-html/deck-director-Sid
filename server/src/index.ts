@@ -17,6 +17,8 @@ const PORT = Number(process.env.PORT || 3001);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
 const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview';
 const HAS_OPENROUTER_KEY = Boolean(process.env.OPENROUTER_API_KEY);
+const HAS_AIRTABLE_TOKEN = Boolean(process.env.AIRTABLE_ACCESS_TOKEN || process.env.AIRTABLE_TOKEN);
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appb1sdK2880A8HYT';
 
 app.use(cors({ origin: CLIENT_ORIGIN === '*' ? true : CLIENT_ORIGIN }));
 app.use(express.json({ limit: '10mb' }));
@@ -204,6 +206,8 @@ app.get('/api/health', (_req, res) => {
     runtime: {
       hasOpenRouterKey: HAS_OPENROUTER_KEY,
       imageModel: OPENROUTER_IMAGE_MODEL,
+      hasAirtableToken: HAS_AIRTABLE_TOKEN,
+      airtableBaseId: AIRTABLE_BASE_ID,
     },
   });
 });
