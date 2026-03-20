@@ -44,7 +44,7 @@ type CompiledSlide = {
 };
 
 type CompileResult = { rowCount: number; validRowCount: number; invalidRows: Array<{ rowNumber: number; missing: string[]; valid: boolean }>; compiledSlides: CompiledSlide[]; versionId?: string };
-type GenerateResult = { runId: string; versionId: string; generatedCount: number; model: string };
+type GenerateResult = { runId: string; versionId: string; generatedCount: number; model: string; engine?: string };
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
@@ -118,13 +118,13 @@ function App() {
     <div className="shell compiler-shell">
       <header className="hero compiler-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Deck Director / Airtable-first</p>
-          <h1>Compile decks directly from Airtable.</h1>
-          <p className="lede">The platform is now wired to the Deck Director base: versions, slide rows, and reference styles are fetched from Airtable and compiled into slide plans inside the app.</p>
+          <p className="eyebrow">Deck Director / AI-native generation</p>
+          <h1>Generate finished slides from Airtable rows.</h1>
+          <p className="lede">Deck Director is now positioned as an AI-first slide engine: Airtable rows, rolling context, and linked reference styles are assembled into prompt packages for Nano Banana 2 generation.</p>
           <ul className="principle-strip">
-            <li>Decks from Airtable</li>
-            <li>References with images</li>
-            <li>Rolling-context compilation</li>
+            <li>Nano Banana 2 primary path</li>
+            <li>Reference-driven slide DNA</li>
+            <li>Rolling-context generation</li>
           </ul>
         </div>
         <div className="hero-panel">
@@ -147,7 +147,7 @@ function App() {
         <section className="principles">
           <div>
             <p className="eyebrow">Compiler control</p>
-            <h2>Select the Airtable version to compile</h2>
+            <h2>Select the Airtable version to generate</h2>
           </div>
           <div>
             <div className="control-row">
@@ -156,11 +156,11 @@ function App() {
                   <option key={version.id} value={version.id}>{version.name} · {version.status}</option>
                 ))}
               </select>
-              <button onClick={handleGenerate} disabled={!selectedVersion || generating}>{generating ? 'Generating…' : 'Generate'}</button>
-              <span className="status-pill">{busy ? 'Compiling…' : generating ? 'Writing back to Airtable…' : 'Live from Airtable'}</span>
+              <button onClick={handleGenerate} disabled={!selectedVersion || generating}>{generating ? 'Generating with Nano Banana 2…' : 'Generate Slides'}</button>
+              <span className="status-pill">{busy ? 'Compiling prompt package…' : generating ? 'Generating + writing back to Airtable…' : 'AI-ready from Airtable'}</span>
             </div>
             <p className="media-note">{selectedDeck?.description || spec?.summary}</p>
-            {generateResult ? <p className="media-note">Last run: {generateResult.runId} · {generateResult.generatedCount} generated slide records written using {generateResult.model}.</p> : null}
+            {generateResult ? <p className="media-note">Last run: {generateResult.runId} · {generateResult.generatedCount} generated slide records written using {generateResult.engine || 'nano-banana-2'} / {generateResult.model}.</p> : null}
           </div>
         </section>
 
@@ -185,8 +185,8 @@ function App() {
 
         <section className="principles">
           <div>
-            <p className="eyebrow">Design formulas</p>
-            <h2>The math driving the compile</h2>
+            <p className="eyebrow">Generation system</p>
+            <h2>The rules driving Nano Banana 2</h2>
           </div>
           <ul className="plain-list">
             <li><strong>Layout:</strong> {spec?.designFormulaSystem.layout.primarySplit}</li>
@@ -197,7 +197,7 @@ function App() {
         </section>
 
         <section className="schema-table-wrap">
-          <h3 className="inline-title">Compiled slide plan</h3>
+          <h3 className="inline-title">Generation plan</h3>
           <table className="schema-table">
             <thead>
               <tr>

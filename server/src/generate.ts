@@ -2,10 +2,13 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import { compileFromAirtable, getAirtableSnapshot } from './airtable';
 import { renderSlidePreview } from './render';
+import { generateImageViaOpenRouter } from './lib/openrouterImage';
+import { buildGenerationPrompt, buildPromptPackage } from './lib/promptBuilder';
 
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appb1sdK2880A8HYT';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_ACCESS_TOKEN || process.env.AIRTABLE_TOKEN || '';
 const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview';
+const GENERATION_ENGINE = process.env.DECK_DIRECTOR_GENERATION_ENGINE || 'nano-banana-2';
 
 const headers = {
   Authorization: `Bearer ${AIRTABLE_TOKEN}`,
@@ -55,6 +58,8 @@ function buildPromptSummary(slide: any) {
   const refs = (slide.linkedReferences || []).map((ref: any) => ref.name).join(', ');
   return [
     `Slide ${slide.slideNumber}: ${slide.title}`,
+    `Engine: ${GENERATION_ENGINE}`,
+    `Model: ${OPENROUTER_IMAGE_MODEL}`,
     `Template: ${slide.targetTemplate}`,
     slide.visualBrief ? `Visual brief: ${slide.visualBrief}` : '',
     refs ? `References: ${refs}` : '',
@@ -94,12 +99,12 @@ export async function generateFromAirtable(versionId?: string) {
   if (!targetVersionId) throw new Error('No Airtable deck version found to generate from.');
 
   const run = await createRecord('Render Runs', {
-    'Run Name': `Render ${new Date().toISOString()}`,
+    'Run Name': `AI Generate ${new Date().toISOString()}`,
     'Run Type': 'Render',
     Status: 'Running',
     Model: OPENROUTER_IMAGE_MODEL,
     'Started At': new Date().toISOString(),
-    'Log Summary': `Generating ${compiled.compiledSlides.length} slides from Airtable version ${targetVersionId}`,
+    'Log Summary': `AI-generating ${compiled.compiledSlides.length} slides from Airtable version ${targetVersionId} using ${GENERATION_ENGINE}.`,
     'Deck Version': [targetVersionId],
   });
 
@@ -111,69 +116,109 @@ export async function generateFromAirtable(versionId?: string) {
 
   const generatedRecords: Array<{ slideNumber: number; generatedId: string; slideRowId?: string }> = [];
 
-  for (const slide of compiled.compiledSlides) {
-    const sourceRow = slideRowByNumber.get(slide.slideNumber);
-    const generated = await createRecord('Generated Slides', {
-      'Generated Slide Name': `V${targetVersionId.slice(-4)} / Slide ${slide.slideNumber}`,
-      Status: 'Generating',
-      'Prompt Summary': buildPromptSummary(slide),
-      'Layout JSON': buildLayoutJson(slide),
-      Model: OPENROUTER_IMAGE_MODEL,
-      'Iteration Number': 1,
-      Notes: 'Generated from Airtable compiler with visual preview attachment.',
-      'Deck Version': [targetVersionId],
-      ...(sourceRow ? { 'Slide Row': [sourceRow.id] } : {}),
-      'Render Run': [run.id],
-    });
+  try {
+    for (const slide of compiled.compiledSlides) {
+      const sourceRow = slideRowByNumber.get(slide.slideNumber);
+      const prompt = buildGenerationPrompt(slide);
+      const promptPackage = buildPromptPackage(slide);
 
-    const preview = await renderSlidePreview(slide);
-    await uploadAttachmentToGenerated(generated.id, 'Preview Image', preview.filePath, preview.fileName, preview.contentType);
-    if (sourceRow?.id) {
-      await uploadAttachmentToGenerated(sourceRow.id, 'Generated Preview', preview.filePath, preview.fileName, preview.contentType);
+      const generated = await createRecord('Generated Slides', {
+        'Generated Slide Name': `V${targetVersionId.slice(-4)} / Slide ${slide.slideNumber}`,
+        Status: 'Generating',
+        'Prompt Summary': buildPromptSummary(slide),
+        'Layout JSON': buildLayoutJson(slide),
+        Model: OPENROUTER_IMAGE_MODEL,
+        'Iteration Number': 1,
+        Notes: `AI-first slide generation via ${GENERATION_ENGINE}.`,
+        'Deck Version': [targetVersionId],
+        ...(sourceRow ? { 'Slide Row': [sourceRow.id] } : {}),
+        'Render Run': [run.id],
+      });
+
+      let imageOutput;
+      try {
+        imageOutput = await generateImageViaOpenRouter({
+          model: OPENROUTER_IMAGE_MODEL,
+          prompt,
+          aspectRatio: '16:9',
+          references: (slide.linkedReferences || [])
+            .filter((reference: any) => reference?.imageUrl)
+            .slice(0, 3)
+            .map((reference: any) => ({
+              url: reference.imageUrl,
+              caption: reference.name,
+            })),
+        });
+      } catch (error) {
+        imageOutput = await renderSlidePreview(slide);
+        await patchRecords('Generated Slides', [{
+          id: generated.id,
+          fields: {
+            Notes: `AI generation failed; fallback preview rendered. Engine: ${GENERATION_ENGINE}. Error: ${error instanceof Error ? error.message.slice(0, 800) : 'Unknown error'}`,
+          },
+        }]);
+      }
+
+      await uploadAttachmentToGenerated(generated.id, 'Preview Image', imageOutput.filePath, imageOutput.fileName, imageOutput.contentType);
+      if (sourceRow?.id) {
+        await uploadAttachmentToGenerated(sourceRow.id, 'Generated Preview', imageOutput.filePath, imageOutput.fileName, imageOutput.contentType);
+      }
+
+      await patchRecords('Generated Slides', [{
+        id: generated.id,
+        fields: {
+          Status: 'Succeeded',
+          Notes: `Engine: ${GENERATION_ENGINE}\nPrompt package:\n${JSON.stringify(promptPackage, null, 2).slice(0, 90000)}`,
+        },
+      }]);
+
+      generatedRecords.push({ slideNumber: slide.slideNumber, generatedId: generated.id, slideRowId: sourceRow?.id });
     }
 
-    await patchRecords('Generated Slides', [{
-      id: generated.id,
+    const slideRowUpdates = generatedRecords
+      .filter((item) => item.slideRowId)
+      .map((item) => ({
+        id: item.slideRowId as string,
+        fields: {
+          'Generation Status': 'Succeeded',
+          'Generated Layout JSON': buildLayoutJson(compiled.compiledSlides.find((slide) => slide.slideNumber === item.slideNumber)),
+          'Last Generated At': new Date().toISOString(),
+          'Last Render Run': [run.id],
+        },
+      }));
+
+    if (slideRowUpdates.length) {
+      for (let i = 0; i < slideRowUpdates.length; i += 10) {
+        await patchRecords('Slide Rows', slideRowUpdates.slice(i, i + 10));
+      }
+    }
+
+    await patchRecords('Render Runs', [{
+      id: run.id,
       fields: {
         Status: 'Succeeded',
+        'Finished At': new Date().toISOString(),
+        'Log Summary': `Created ${generatedRecords.length} AI-generated slide records from Airtable version ${targetVersionId} using ${GENERATION_ENGINE}.`,
       },
     }]);
 
-    generatedRecords.push({ slideNumber: slide.slideNumber, generatedId: generated.id, slideRowId: sourceRow?.id });
-  }
-
-  const slideRowUpdates = generatedRecords
-    .filter((item) => item.slideRowId)
-    .map((item) => ({
-      id: item.slideRowId as string,
+    return {
+      runId: run.id,
+      versionId: targetVersionId,
+      generatedCount: generatedRecords.length,
+      generatedRecords,
+      model: OPENROUTER_IMAGE_MODEL,
+      engine: GENERATION_ENGINE,
+    };
+  } catch (error) {
+    await patchRecords('Render Runs', [{
+      id: run.id,
       fields: {
-        'Generation Status': 'Succeeded',
-        'Generated Layout JSON': buildLayoutJson(compiled.compiledSlides.find((slide) => slide.slideNumber === item.slideNumber)),
-        'Last Generated At': new Date().toISOString(),
-        'Last Render Run': [run.id],
+        Status: 'Failed',
+        'Finished At': new Date().toISOString(),
+        'Log Summary': `AI generation failed for version ${targetVersionId}: ${error instanceof Error ? error.message.slice(0, 900) : 'Unknown error'}`,
       },
-    }));
-
-  if (slideRowUpdates.length) {
-    for (let i = 0; i < slideRowUpdates.length; i += 10) {
-      await patchRecords('Slide Rows', slideRowUpdates.slice(i, i + 10));
-    }
+    }]).catch(() => undefined);
+    throw error;
   }
-
-  await patchRecords('Render Runs', [{
-    id: run.id,
-    fields: {
-      Status: 'Succeeded',
-      'Finished At': new Date().toISOString(),
-      'Log Summary': `Created ${generatedRecords.length} generated slide records from Airtable version ${targetVersionId}.`,
-    },
-  }]);
-
-  return {
-    runId: run.id,
-    versionId: targetVersionId,
-    generatedCount: generatedRecords.length,
-    generatedRecords,
-    model: OPENROUTER_IMAGE_MODEL,
-  };
 }

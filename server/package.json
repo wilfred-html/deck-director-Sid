@@ -1,7 +1,7 @@
 {
   "name": "deck-director-api",
   "version": "1.0.0",
-  "description": "Presentation consistency audit API",
+  "description": "AI-first slide generation API for Deck Director",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx src/index.ts",

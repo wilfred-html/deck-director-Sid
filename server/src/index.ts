@@ -18,6 +18,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
 const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview';
+const GENERATION_ENGINE = process.env.DECK_DIRECTOR_GENERATION_ENGINE || 'nano-banana-2';
 const HAS_OPENROUTER_KEY = Boolean(process.env.OPENROUTER_API_KEY);
 const HAS_AIRTABLE_TOKEN = Boolean(process.env.AIRTABLE_ACCESS_TOKEN || process.env.AIRTABLE_TOKEN);
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appb1sdK2880A8HYT';
@@ -208,6 +209,7 @@ app.get('/api/health', (_req, res) => {
     runtime: {
       hasOpenRouterKey: HAS_OPENROUTER_KEY,
       imageModel: OPENROUTER_IMAGE_MODEL,
+      generationEngine: GENERATION_ENGINE,
       hasAirtableToken: HAS_AIRTABLE_TOKEN,
       airtableBaseId: AIRTABLE_BASE_ID,
     },
