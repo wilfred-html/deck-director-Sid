@@ -11,6 +11,7 @@ import type { SlideModel } from './schemas/slide';
 import { compilerStages, deckRowSchema, rollingWindowRule, designFormulaSystem } from './deckCompilerSpec';
 import { ingestDeckRows } from './compiler';
 import { compileFromAirtable, getAirtableSnapshot } from './airtable';
+import { generateFromAirtable } from './generate';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -239,6 +240,16 @@ app.get('/api/compiler/from-airtable', async (req, res) => {
     return res.json(compiled);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to compile from Airtable.' });
+  }
+});
+
+app.post('/api/generate/from-airtable', async (req, res) => {
+  try {
+    const versionId = typeof req.body?.versionId === 'string' ? req.body.versionId : undefined;
+    const result = await generateFromAirtable(versionId);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate from Airtable.' });
   }
 });
 

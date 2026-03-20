@@ -44,6 +44,7 @@ type CompiledSlide = {
 };
 
 type CompileResult = { rowCount: number; validRowCount: number; invalidRows: Array<{ rowNumber: number; missing: string[]; valid: boolean }>; compiledSlides: CompiledSlide[]; versionId?: string };
+type GenerateResult = { runId: string; versionId: string; generatedCount: number; model: string };
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
@@ -54,6 +55,8 @@ function App() {
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generateResult, setGenerateResult] = useState<GenerateResult | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -88,6 +91,28 @@ function App() {
     const version = snapshot.versions.find((item) => item.id === selectedVersion);
     return snapshot.decks.find((deck) => version?.deckIds.includes(deck.id)) || null;
   }, [snapshot, selectedVersion]);
+
+  async function handleGenerate() {
+    if (!selectedVersion) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/generate/from-airtable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId: selectedVersion }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to generate');
+      setGenerateResult(data);
+      const refreshed = await fetch(`${API_BASE}/api/compiler/from-airtable?versionId=${encodeURIComponent(selectedVersion)}`).then((r) => r.json());
+      setCompiled(refreshed);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate');
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   return (
     <div className="shell compiler-shell">
@@ -131,9 +156,11 @@ function App() {
                   <option key={version.id} value={version.id}>{version.name} · {version.status}</option>
                 ))}
               </select>
-              <span className="status-pill">{busy ? 'Compiling…' : 'Live from Airtable'}</span>
+              <button onClick={handleGenerate} disabled={!selectedVersion || generating}>{generating ? 'Generating…' : 'Generate'}</button>
+              <span className="status-pill">{busy ? 'Compiling…' : generating ? 'Writing back to Airtable…' : 'Live from Airtable'}</span>
             </div>
             <p className="media-note">{selectedDeck?.description || spec?.summary}</p>
+            {generateResult ? <p className="media-note">Last run: {generateResult.runId} · {generateResult.generatedCount} generated slide records written using {generateResult.model}.</p> : null}
           </div>
         </section>
 
