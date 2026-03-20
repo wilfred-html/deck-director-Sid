@@ -16,6 +16,7 @@ import { applyEditedSlideVariant, createEditedSlideVariant } from './edit';
 import { preparePPTXForExtraction } from './pptxIngestion';
 import { bulkRegenerateSlides } from './bulkRegenerate';
 import { batchImportSlides } from './batchImport';
+import { applyGlobalEdit } from './globalEdit';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -314,6 +315,24 @@ app.post('/api/bulk/regenerate', async (req, res) => {
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to bulk regenerate slides.' });
+  }
+});
+
+app.post('/api/global/edit', async (req, res) => {
+  try {
+    const versionId = typeof req.body?.versionId === 'string' ? req.body.versionId : '';
+    const editPrompt = typeof req.body?.editPrompt === 'string' ? req.body.editPrompt : '';
+    const referenceImageUrls = Array.isArray(req.body?.referenceImageUrls) ? req.body.referenceImageUrls.filter((item: unknown) => typeof item === 'string') : [];
+    if (!versionId) {
+      return res.status(400).json({ error: 'versionId is required.' });
+    }
+    if (!editPrompt.trim()) {
+      return res.status(400).json({ error: 'editPrompt is required.' });
+    }
+    const result = await applyGlobalEdit(versionId, editPrompt.trim(), referenceImageUrls);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to apply global edit.' });
   }
 });
 

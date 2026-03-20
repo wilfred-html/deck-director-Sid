@@ -279,6 +279,38 @@ textarea {
   display: grid;
   gap: 10px;
 }
+.global-edit-divider {
+  margin: 18px 0 12px;
+  text-align: center;
+  position: relative;
+}
+.global-edit-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.1);
+}
+.global-edit-divider span {
+  position: relative;
+  display: inline-block;
+  background: #0f172a;
+  padding: 0 12px;
+  font-size: 13px;
+  color: rgba(238, 242, 255, 0.5);
+  font-weight: 500;
+}
+.global-edit-btn {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+.global-edit-btn:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.2);
+  border-color: #fbbf24;
+}
 .thumb-card img,
 .thumb-placeholder {
   width: 100%;

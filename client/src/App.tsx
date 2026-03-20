@@ -104,6 +104,8 @@ function App() {
   const [bulkRegenerating, setBulkRegenerating] = useState(false);
   const [batchImporting, setBatchImporting] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
+  const [globalEditing, setGlobalEditing] = useState(false);
+  const [globalEditPrompt, setGlobalEditPrompt] = useState('');
   const stageRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const batchFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -394,6 +396,31 @@ function App() {
     }
   }
 
+  async function handleGlobalEdit() {
+    if (!selectedVersion || !globalEditPrompt.trim()) return;
+    setGlobalEditing(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/global/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          versionId: selectedVersion,
+          editPrompt: globalEditPrompt.trim(),
+          referenceImageUrls: referenceImages,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to apply global edit');
+      await refreshPresentation(selectedVersion);
+      setGlobalEditPrompt('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply global edit');
+    } finally {
+      setGlobalEditing(false);
+    }
+  }
+
   const displayedImageUrl = draftVariant?.variantImageUrl || selectedGeneratedSlide?.previewImageUrl || '';
 
   return (
@@ -572,6 +599,19 @@ function App() {
                           </div>
                         </div>
                       ) : null}
+                      
+                      <div className="global-edit-divider">
+                        <span>Global edit (all slides)</span>
+                      </div>
+                      
+                      <textarea
+                        value={globalEditPrompt}
+                        onChange={(e) => setGlobalEditPrompt(e.target.value)}
+                        placeholder="e.g. Make all text 20% larger"
+                      />
+                      <button onClick={handleGlobalEdit} disabled={globalEditing || !globalEditPrompt.trim()} className="global-edit-btn">
+                        {globalEditing ? 'Applying to all slides…' : 'Apply to All Slides'}
+                      </button>
                     </div>
                   )}
                 </div>
