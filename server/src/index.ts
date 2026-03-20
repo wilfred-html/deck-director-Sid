@@ -15,6 +15,8 @@ const execFileAsync = promisify(execFile);
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
+const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview';
+const HAS_OPENROUTER_KEY = Boolean(process.env.OPENROUTER_API_KEY);
 
 app.use(cors({ origin: CLIENT_ORIGIN === '*' ? true : CLIENT_ORIGIN }));
 app.use(express.json({ limit: '10mb' }));
@@ -196,7 +198,14 @@ async function runDeckAudit(filePath: string, originalName: string) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'deck-director-api' });
+  res.json({
+    ok: true,
+    service: 'deck-director-api',
+    runtime: {
+      hasOpenRouterKey: HAS_OPENROUTER_KEY,
+      imageModel: OPENROUTER_IMAGE_MODEL,
+    },
+  });
 });
 
 app.get('/api/compiler/spec', (_req, res) => {
