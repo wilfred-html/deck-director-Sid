@@ -14,6 +14,32 @@ type CompilerStage = {
   description: string;
 };
 
+type FormulaSystem = {
+  layout: {
+    primarySplit: string;
+    fallbackSplits: string[];
+    grid: string;
+    rule: string;
+  };
+  typography: {
+    modularScale: string[];
+    hierarchy: string;
+    lineLength: string;
+    densityRule: string;
+  };
+  spacing: {
+    rhythm: string;
+    steps: number[];
+    rule: string;
+  };
+  performance: {
+    generationMode: string;
+    contextWindow: string;
+    reason: string;
+    batchingRule: string;
+  };
+};
+
 type CompilerSpec = {
   productDirection: string;
   summary: string;
@@ -26,6 +52,35 @@ type CompilerSpec = {
   };
   deckRowSchema: SchemaField[];
   compilerStages: CompilerStage[];
+  designFormulaSystem: FormulaSystem;
+};
+
+type CompiledSlide = {
+  slideNumber: number;
+  section: string;
+  intent: string;
+  targetTemplate: string;
+  title: string;
+  subtitle: string;
+  body: string;
+  bullets: string[];
+  visualBrief: string;
+  mediaType: string;
+  emphasis: string;
+  rollingContext: Array<{
+    slide_number: string;
+    title: string;
+    section: string;
+    intent: string;
+    layout_type: string;
+  }>;
+};
+
+type IngestResult = {
+  rowCount: number;
+  validRowCount: number;
+  invalidRows: Array<{ rowNumber: number; missing: string[]; valid: boolean }>;
+  compiledSlides: CompiledSlide[];
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
@@ -66,6 +121,9 @@ const sampleRows = [
 function App() {
   const [spec, setSpec] = useState<CompilerSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [ingest, setIngest] = useState<IngestResult | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/compiler/spec`)
@@ -77,6 +135,26 @@ function App() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load compiler spec'));
   }, []);
 
+  async function handleIngest() {
+    if (!sheet) return;
+    setBusy(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('sheet', sheet);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/compiler/ingest`, { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to ingest sheet');
+      setIngest(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to ingest sheet');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="shell compiler-shell">
       <header className="hero compiler-hero">
@@ -86,6 +164,13 @@ function App() {
           <p className="lede">
             Deck Director is being re-hauled into a row-driven deck compiler: spreadsheet in, locked design system in the middle, coherent slide sequence out.
           </p>
+          <div className="hero-actions">
+            <label className="upload-card">
+              <span>{sheet ? sheet.name : 'Choose CSV / XLSX / XLS'}</span>
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => setSheet(e.target.files?.[0] || null)} />
+            </label>
+            <button disabled={!sheet || busy} onClick={handleIngest}>{busy ? 'Compiling…' : 'Ingest sheet'}</button>
+          </div>
           <ul className="principle-strip">
             <li>CSV / Excel source of truth</li>
             <li>Rolling local context</li>
@@ -95,7 +180,7 @@ function App() {
         <div className="hero-panel">
           <div className="hero-stat"><span>Direction</span><strong>Spreadsheet-driven slide generation</strong></div>
           <div className="hero-stat"><span>Context rule</span><strong>Current row + previous two rows</strong></div>
-          <div className="hero-stat"><span>Global memory</span><strong>Typography, grid, media policy, templates</strong></div>
+          <div className="hero-stat"><span>Design math</span><strong>Golden-ratio guidance + modular scales + 8pt rhythm</strong></div>
         </div>
       </header>
 
@@ -150,6 +235,23 @@ function App() {
 
         <section className="principles">
           <div>
+            <p className="eyebrow">Design formulas</p>
+            <h2>The math behind the compiler</h2>
+          </div>
+          <div>
+            <ul className="plain-list">
+              <li><strong>Layout:</strong> {spec?.designFormulaSystem.layout.primarySplit}</li>
+              <li><strong>Fallbacks:</strong> {(spec?.designFormulaSystem.layout.fallbackSplits || []).join(' · ')}</li>
+              <li><strong>Grid:</strong> {spec?.designFormulaSystem.layout.grid}</li>
+              <li><strong>Typography:</strong> modular scales {(spec?.designFormulaSystem.typography.modularScale || []).join(' / ')}</li>
+              <li><strong>Spacing:</strong> {spec?.designFormulaSystem.spacing.rhythm} → {(spec?.designFormulaSystem.spacing.steps || []).join(', ')}</li>
+              <li><strong>Performance:</strong> {spec?.designFormulaSystem.performance.reason}</li>
+            </ul>
+          </div>
+        </section>
+
+        <section className="principles">
+          <div>
             <p className="eyebrow">Compiler stages</p>
             <h2>The new pipeline</h2>
           </div>
@@ -199,6 +301,57 @@ function App() {
             <pre>{JSON.stringify(sampleRows, null, 2)}</pre>
           </div>
         </section>
+
+        {ingest ? (
+          <>
+            <section className="summary-grid compiler-grid">
+              <article>
+                <span>Rows loaded</span>
+                <strong>{ingest.rowCount}</strong>
+                <small>records parsed from your sheet</small>
+              </article>
+              <article>
+                <span>Valid rows</span>
+                <strong>{ingest.validRowCount}</strong>
+                <small>rows ready for compilation</small>
+              </article>
+              <article>
+                <span>Invalid rows</span>
+                <strong>{ingest.invalidRows.length}</strong>
+                <small>rows missing required fields</small>
+              </article>
+              <article>
+                <span>Compiled slides</span>
+                <strong>{ingest.compiledSlides.length}</strong>
+                <small>slide plans created</small>
+              </article>
+            </section>
+
+            <section className="schema-table-wrap">
+              <h3 className="inline-title">Compiled slide preview</h3>
+              <table className="schema-table">
+                <thead>
+                  <tr>
+                    <th>Slide</th>
+                    <th>Template</th>
+                    <th>Title</th>
+                    <th>Rolling context</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ingest.compiledSlides.slice(0, 12).map((slide) => (
+                    <tr key={slide.slideNumber}>
+                      <td>{slide.slideNumber}</td>
+                      <td><code>{slide.targetTemplate}</code></td>
+                      <td>{slide.title}</td>
+                      <td>{slide.rollingContext.map((item) => item.slide_number).join(' → ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          </>
+        ) : null}
       </main>
     </div>
   );

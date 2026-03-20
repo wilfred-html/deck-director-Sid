@@ -70,6 +70,32 @@ export const rollingWindowRule: RollingWindowRule = {
   note: 'Use global deck style as fixed memory; use only the previous two rows for local narrative continuity.',
 };
 
+export const designFormulaSystem = {
+  layout: {
+    primarySplit: 'golden-ratio-inspired 62/38 or 38/62 for premium asymmetric layouts',
+    fallbackSplits: ['60/40', '66/33', '50/50 only when symmetry is intentional'],
+    grid: '12-column grid with fixed margins and gutters',
+    rule: 'Use golden ratio as a composition guide, not as dogma for every object.',
+  },
+  typography: {
+    modularScale: ['1.25', '1.333'],
+    hierarchy: 'H1/H2/H3/body/caption must have clear contrast gaps',
+    lineLength: 'Aim for 45-75 characters per line in readable text blocks',
+    densityRule: 'If a row exceeds the template max words, compress or split before rendering.',
+  },
+  spacing: {
+    rhythm: '8pt system',
+    steps: [8, 16, 24, 32, 48, 64, 96],
+    rule: 'Never nudge spacing arbitrarily; move one scale step at a time.',
+  },
+  performance: {
+    generationMode: 'sequential compile with rolling local context',
+    contextWindow: 'current row + previous two rows + fixed global deck system',
+    reason: 'Preserves continuity without exploding token cost or causing long-range drift.',
+    batchingRule: 'Normalize and validate all rows first, then render in order.',
+  },
+};
+
 export const compilerStages = [
   {
     name: 'Normalize rows',

@@ -8,7 +8,8 @@ import { promisify } from 'util';
 import { buildRedesignPlan } from './lib/redesignPlanner';
 import { classifyMediaFromContext } from './lib/media';
 import type { SlideModel } from './schemas/slide';
-import { compilerStages, deckRowSchema, rollingWindowRule } from './deckCompilerSpec';
+import { compilerStages, deckRowSchema, rollingWindowRule, designFormulaSystem } from './deckCompilerSpec';
+import { ingestDeckRows } from './compiler';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -205,7 +206,23 @@ app.get('/api/compiler/spec', (_req, res) => {
     rollingWindowRule,
     deckRowSchema,
     compilerStages,
+    designFormulaSystem,
   });
+});
+
+app.post('/api/compiler/ingest', upload.single('sheet'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No CSV/XLSX/XLS uploaded.' });
+  }
+
+  try {
+    const compiled = await ingestDeckRows(req.file.path, req.file.originalname);
+    await fs.promises.unlink(req.file.path).catch(() => undefined);
+    return res.json(compiled);
+  } catch (error) {
+    await fs.promises.unlink(req.file.path).catch(() => undefined);
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Compiler ingest failed.' });
+  }
 });
 
 app.post('/api/audits', upload.single('deck'), async (req, res) => {
