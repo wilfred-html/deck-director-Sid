@@ -1,9 +1,6 @@
 :root {
-  color: #f8f3ea;
-  background:
-    radial-gradient(circle at top left, rgba(33, 91, 255, 0.22), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(197, 145, 73, 0.22), transparent 24%),
-    #0c1018;
+  color: #eef2ff;
+  background: #0f172a;
 }
 
 * { box-sizing: border-box; }
@@ -11,8 +8,8 @@ body {
   margin: 0;
   min-width: 320px;
   font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
-  background: transparent;
-  color: #f8f3ea;
+  background: #0f172a;
+  color: #eef2ff;
 }
 
 a { color: inherit; }
@@ -40,15 +37,14 @@ button, input { font: inherit; }
 .empty-state,
 .schema-table-wrap,
 .code-panel {
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(22px);
-  box-shadow: 0 24px 80px rgba(0,0,0,0.25);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: #111827;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.14);
 }
 
 .hero-copy {
-  padding: 40px;
-  border-radius: 40px;
+  padding: 28px;
+  border-radius: 20px;
 }
 
 .hero-copy h1 {
@@ -61,9 +57,9 @@ button, input { font: inherit; }
 
 .lede {
   max-width: 60ch;
-  font-size: 1.05rem;
-  line-height: 1.7;
-  color: rgba(248,243,234,0.78);
+  font-size: 1rem;
+  line-height: 1.65;
+  color: rgba(226, 232, 240, 0.82);
 }
 
 .eyebrow {
@@ -71,21 +67,21 @@ button, input { font: inherit; }
   text-transform: uppercase;
   letter-spacing: 0.22em;
   font-size: 0.76rem;
-  color: #9cb3ff;
+  color: #93c5fd;
 }
 
 .hero-panel {
-  padding: 24px;
-  border-radius: 32px;
+  padding: 20px;
+  border-radius: 18px;
   display: grid;
-  gap: 16px;
-  align-content: end;
+  gap: 12px;
+  align-content: start;
 }
 
 .hero-stat {
-  padding: 18px;
-  border-radius: 24px;
-  background: rgba(12,16,24,0.58);
+  padding: 14px;
+  border-radius: 14px;
+  background: #0f172a;
 }
 
 .hero-stat span,
@@ -95,7 +91,7 @@ button, input { font: inherit; }
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: rgba(248,243,234,0.58);
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .hero-stat strong,
@@ -122,14 +118,14 @@ button, input { font: inherit; }
 .principle-strip li {
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.08);
+  background: #1f2937;
   font-size: 0.82rem;
 }
 
 .dashboard {
   display: grid;
-  gap: 24px;
-  margin-top: 24px;
+  gap: 16px;
+  margin-top: 16px;
 }
 
 .summary-grid {
@@ -143,8 +139,8 @@ button, input { font: inherit; }
 .toolbar,
 .schema-table-wrap,
 .code-panel {
-  border-radius: 30px;
-  padding: 24px;
+  border-radius: 18px;
+  padding: 18px;
 }
 
 .summary-grid article small,
@@ -157,7 +153,7 @@ button, input { font: inherit; }
 .principles {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
-  gap: 24px;
+  gap: 16px;
 }
 
 .principles h2,
@@ -174,7 +170,7 @@ button, input { font: inherit; }
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
 }
 
 .plain-list {
@@ -192,19 +188,19 @@ button, input { font: inherit; }
 .schema-table td {
   text-align: left;
   vertical-align: top;
-  padding: 14px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .schema-table th {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(248,243,234,0.58);
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .schema-table code {
-  color: #9cb3ff;
+  color: #93c5fd;
 }
 
 .code-panel pre {
@@ -223,7 +219,7 @@ button, input { font: inherit; }
 }
 
 @media (max-width: 640px) {
-  .hero-copy { padding: 24px; border-radius: 28px; }
+  .hero-copy { padding: 20px; border-radius: 16px; }
   .summary-grid { grid-template-columns: 1fr; }
   .toolbar { display: block; }
   .schema-table-wrap { overflow-x: auto; }
