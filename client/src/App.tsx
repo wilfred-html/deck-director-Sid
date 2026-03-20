@@ -100,6 +100,8 @@ function App() {
   const [applyingEdit, setApplyingEdit] = useState(false);
   const [draftVariant, setDraftVariant] = useState<EditVariant | null>(null);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [selectedReferenceSlides, setSelectedReferenceSlides] = useState<Set<string>>(new Set());
+  const [bulkRegenerating, setBulkRegenerating] = useState(false);
   const stageRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -322,6 +324,43 @@ function App() {
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function toggleReferenceSlide(slideId: string) {
+    setSelectedReferenceSlides((prev) => {
+      const next = new Set(prev);
+      if (next.has(slideId)) {
+        next.delete(slideId);
+      } else {
+        next.add(slideId);
+      }
+      return next;
+    });
+  }
+
+  async function handleBulkRegenerate() {
+    if (!selectedVersion || selectedReferenceSlides.size === 0) return;
+    setBulkRegenerating(true);
+    setError(null);
+    try {
+      const referenceUrls = Array.from(selectedReferenceSlides).map((slideId) => {
+        const slide = presentation?.generatedSlides.find((s) => s.id === slideId);
+        return slide?.previewImageUrl || '';
+      }).filter(Boolean);
+
+      const response = await fetch(`${API_BASE}/api/bulk/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId: selectedVersion, referenceImageUrls: referenceUrls }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to bulk regenerate');
+      await refreshPresentation(selectedVersion);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to bulk regenerate slides');
+    } finally {
+      setBulkRegenerating(false);
+    }
+  }
+
   const displayedImageUrl = draftVariant?.variantImageUrl || selectedGeneratedSlide?.previewImageUrl || '';
 
   return (
@@ -383,9 +422,11 @@ function App() {
             <div className="viewer-toolbar">
               <span className="status-pill subtle">{loadingPresentation ? 'Loading presentation…' : `${presentation?.generatedCount || 0} slides viewable`}</span>
               <span className="status-pill subtle">← / → navigate</span>
+              {selectedReferenceSlides.size > 0 ? <span className="status-pill">{selectedReferenceSlides.size} reference{selectedReferenceSlides.size !== 1 ? 's' : ''} selected</span> : null}
               <button onClick={() => moveSelected(-1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[0]?.id === selectedGeneratedSlide.id}>Previous</button>
               <button onClick={() => moveSelected(1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[presentation.generatedSlides.length - 1]?.id === selectedGeneratedSlide.id}>Next</button>
               <button onClick={toggleFullscreen} disabled={!selectedGeneratedSlide}>{isFullscreen ? 'Exit Full Screen' : 'Full Screen'}</button>
+              <button onClick={handleBulkRegenerate} disabled={bulkRegenerating || selectedReferenceSlides.size === 0}>{bulkRegenerating ? 'Regenerating…' : 'Bulk Regenerate'}</button>
             </div>
           </div>
 
@@ -393,20 +434,28 @@ function App() {
             {!isFullscreen ? (
               <aside className="filmstrip">
                 {(presentation?.generatedSlides || []).map((slide) => (
-                  <button
-                    key={slide.id}
-                    className={`thumb-card ${slide.id === selectedGeneratedId ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedGeneratedId(slide.id);
-                      setDraftVariant(null);
-                    }}
-                  >
-                    {slide.previewImageUrl ? <img src={slide.previewImageUrl} alt={slide.name} /> : <div className="thumb-placeholder">No preview</div>}
-                    <div className="thumb-meta">
-                      <strong>{slide.slideNumber || '—'}</strong>
-                      <span>{slide.status}</span>
-                    </div>
-                  </button>
+                  <div key={slide.id} className="thumb-wrapper">
+                    <button
+                      className={`thumb-card ${slide.id === selectedGeneratedId ? 'active' : ''} ${selectedReferenceSlides.has(slide.id) ? 'is-reference' : ''}`}
+                      onClick={() => {
+                        setSelectedGeneratedId(slide.id);
+                        setDraftVariant(null);
+                      }}
+                    >
+                      {slide.previewImageUrl ? <img src={slide.previewImageUrl} alt={slide.name} /> : <div className="thumb-placeholder">No preview</div>}
+                      <div className="thumb-meta">
+                        <strong>{slide.slideNumber || '—'}</strong>
+                        <span>{slide.status}</span>
+                      </div>
+                    </button>
+                    <button
+                      className={`ref-toggle ${selectedReferenceSlides.has(slide.id) ? 'active' : ''}`}
+                      onClick={() => toggleReferenceSlide(slide.id)}
+                      title={selectedReferenceSlides.has(slide.id) ? 'Remove as reference' : 'Set as reference'}
+                    >
+                      {selectedReferenceSlides.has(slide.id) ? '★' : '☆'}
+                    </button>
+                  </div>
                 ))}
               </aside>
             ) : null}

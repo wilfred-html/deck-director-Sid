@@ -13,6 +13,8 @@ import { ingestDeckRows } from './compiler';
 import { compileFromAirtable, getAirtableSnapshot, getGeneratedPresentation } from './airtable';
 import { generateFromAirtable } from './generate';
 import { applyEditedSlideVariant, createEditedSlideVariant } from './edit';
+import { preparePPTXForExtraction } from './pptxIngestion';
+import { bulkRegenerateSlides } from './bulkRegenerate';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -294,6 +296,36 @@ app.post('/api/generated/edit/apply', async (req, res) => {
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to apply edited slide variant.' });
+  }
+});
+
+app.post('/api/bulk/regenerate', async (req, res) => {
+  try {
+    const versionId = typeof req.body?.versionId === 'string' ? req.body.versionId : '';
+    const referenceImageUrls = Array.isArray(req.body?.referenceImageUrls) ? req.body.referenceImageUrls.filter((item: unknown) => typeof item === 'string') : [];
+    if (!versionId) {
+      return res.status(400).json({ error: 'versionId is required.' });
+    }
+    if (referenceImageUrls.length === 0) {
+      return res.status(400).json({ error: 'At least one reference image URL is required.' });
+    }
+    const result = await bulkRegenerateSlides(versionId, referenceImageUrls);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to bulk regenerate slides.' });
+  }
+});
+
+app.post('/api/pptx/prepare', upload.single('pptx'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No PPTX file uploaded.' });
+    }
+
+    const result = await preparePPTXForExtraction(req.file.path);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to prepare PPTX for extraction.' });
   }
 });
 
