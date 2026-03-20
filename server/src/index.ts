@@ -269,10 +269,11 @@ app.post('/api/generated/edit', async (req, res) => {
   try {
     const generatedSlideId = typeof req.body?.generatedSlideId === 'string' ? req.body.generatedSlideId : '';
     const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
+    const referenceImageUrls = Array.isArray(req.body?.referenceImageUrls) ? req.body.referenceImageUrls.filter((item: unknown) => typeof item === 'string') : [];
     if (!generatedSlideId || !prompt.trim()) {
       return res.status(400).json({ error: 'generatedSlideId and prompt are required.' });
     }
-    const result = await createEditedSlideVariant(generatedSlideId, prompt.trim());
+    const result = await createEditedSlideVariant(generatedSlideId, prompt.trim(), referenceImageUrls);
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to create edited slide variant.' });

@@ -99,7 +99,9 @@ function App() {
   const [editing, setEditing] = useState(false);
   const [applyingEdit, setApplyingEdit] = useState(false);
   const [draftVariant, setDraftVariant] = useState<EditVariant | null>(null);
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const stageRef = useRef<HTMLElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -254,6 +256,22 @@ function App() {
     await stageRef.current.requestFullscreen();
   }
 
+  function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result;
+        if (typeof result === 'string') {
+          setReferenceImages((prev) => [...prev, result]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function handleEditSubmit() {
     if (!selectedGeneratedSlide || !editPrompt.trim()) return;
     setEditing(true);
@@ -262,7 +280,7 @@ function App() {
       const response = await fetch(`${API_BASE}/api/generated/edit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ generatedSlideId: selectedGeneratedSlide.id, prompt: editPrompt.trim() }),
+        body: JSON.stringify({ generatedSlideId: selectedGeneratedSlide.id, prompt: editPrompt.trim(), referenceImageUrls: referenceImages }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to create edited variant');
@@ -298,6 +316,10 @@ function App() {
 
   function handleCancelDraft() {
     setDraftVariant(null);
+  }
+
+  function removeReferenceImage(index: number) {
+    setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   const displayedImageUrl = draftVariant?.variantImageUrl || selectedGeneratedSlide?.previewImageUrl || '';
@@ -421,7 +443,24 @@ function App() {
                         onChange={(e) => setEditPrompt(e.target.value)}
                         placeholder="e.g. Make the headline larger, reduce the background clutter, and make the players feel more premium and cinematic."
                       />
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        accept="image/*"
+                        multiple
+                        style={{ display: 'none' }}
+                      />
+                      <div className="reference-images">
+                        {referenceImages.map((url, index) => (
+                          <div key={index} className="ref-image-chip">
+                            <img src={url} alt={`Reference ${index + 1}`} />
+                            <button className="remove-chip" onClick={() => removeReferenceImage(index)}>×</button>
+                          </div>
+                        ))}
+                      </div>
                       <div className="chat-actions">
+                        <button onClick={() => fileInputRef.current?.click()} className="ghost-btn">Add reference image</button>
                         <button onClick={handleEditSubmit} disabled={!selectedGeneratedSlide || !editPrompt.trim() || editing}>{editing ? 'Generating edit…' : 'Generate edit'}</button>
                       </div>
                       {draftVariant ? (

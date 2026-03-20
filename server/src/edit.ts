@@ -6,7 +6,7 @@ import { buildSlideEditPrompt } from './lib/editPromptBuilder';
 const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview';
 const GENERATION_ENGINE = process.env.DECK_DIRECTOR_GENERATION_ENGINE || 'nano-banana-2';
 
-export async function createEditedSlideVariant(generatedSlideId: string, prompt: string) {
+export async function createEditedSlideVariant(generatedSlideId: string, prompt: string, referenceImageUrls?: string[]) {
   const slide = await getGeneratedSlideById(generatedSlideId);
   if (!slide.previewImageUrl) throw new Error('Current slide has no preview image to edit.');
 
@@ -19,13 +19,19 @@ export async function createEditedSlideVariant(generatedSlideId: string, prompt:
     prompt,
     promptSummary: slide.promptSummary,
     notes: slide.notes,
+    hasReferenceImages: (referenceImageUrls?.length || 0) > 0,
   });
+
+  const references = [
+    { url: slide.previewImageUrl, caption: 'Current slide to edit' },
+    ...(referenceImageUrls || []).map((url) => ({ url, caption: 'User-provided reference image' })),
+  ];
 
   const result = await generateImageViaOpenRouter({
     model: OPENROUTER_IMAGE_MODEL,
     prompt: editPrompt,
     aspectRatio: '16:9',
-    references: [{ url: slide.previewImageUrl, caption: 'Current slide to edit' }],
+    references,
   });
 
   return {
