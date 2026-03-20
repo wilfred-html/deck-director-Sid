@@ -3,9 +3,11 @@ import express from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { buildRedesignPlan } from './lib/redesignPlanner';
+import { classifyMediaFromContext } from './lib/media';
+import type { SlideModel } from './schemas/slide';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -36,6 +38,7 @@ type SlideAnalysis = {
   driftReasons: string[];
   template: 'hero' | 'divider' | 'text-image' | 'framework' | 'concept-grid' | 'summary';
   recommendation: 'keep' | 'light-cleanup' | 'rebuild';
+  redesignPlan: ReturnType<typeof buildRedesignPlan>;
 };
 
 function scoreDensity(wordCount: number) {
@@ -119,6 +122,35 @@ async function runDeckAudit(filePath: string, originalName: string) {
 
     const imageFile = imageFiles[index - 1];
     const template = detectTemplate(index, words.length, lines.length, headingLength);
+    const slideModel: SlideModel = {
+      slideNumber: index,
+      intent:
+        template === 'hero'
+          ? 'hero'
+          : template === 'divider'
+            ? 'divider'
+            : template === 'framework'
+              ? 'framework'
+              : template === 'summary'
+                ? 'summary'
+                : 'explain',
+      rawText,
+      wordCount: words.length,
+      lineCount: lines.length,
+      headingLength,
+      elements: imageFile
+        ? [
+            {
+              id: `slide-${index}-image`,
+              type: 'image',
+              role: index === 1 ? 'hero-image' : 'supporting-image',
+              bbox: { x: 760, y: 120, w: 560, h: 420 },
+              media: classifyMediaFromContext(rawText, index === 1 ? 'hero-image' : 'supporting-image'),
+            },
+          ]
+        : [],
+    };
+    const redesignPlan = buildRedesignPlan(slideModel);
 
     slides.push({
       slideNumber: index,
@@ -133,6 +165,7 @@ async function runDeckAudit(filePath: string, originalName: string) {
       driftReasons,
       template,
       recommendation: inferRecommendation(consistencyScore),
+      redesignPlan,
     });
   }
 

@@ -14,6 +14,14 @@ type Slide = {
   driftReasons: string[];
   template: 'hero' | 'divider' | 'text-image' | 'framework' | 'concept-grid' | 'summary';
   recommendation: 'keep' | 'light-cleanup' | 'rebuild';
+  redesignPlan: {
+    sourceIntent: string;
+    targetTemplateId: string;
+    confidence: number;
+    actions: Array<{ type: string; reason: string }>;
+    mediaDecisions: Array<{ action: string; reason: string }>;
+    notes: string[];
+  };
 };
 
 type AuditResult = {
@@ -171,6 +179,19 @@ function App() {
                       <li key={reason}>{reason}</li>
                     ))}
                   </ul>
+                  <div className="plan-box">
+                    <p className="plan-kicker">Redesign target</p>
+                    <strong>{slide.redesignPlan.targetTemplateId}</strong>
+                    <span className="plan-confidence">confidence {Math.round(slide.redesignPlan.confidence * 100)}%</span>
+                    <ul className="plan-actions">
+                      {slide.redesignPlan.actions.slice(0, 3).map((action) => (
+                        <li key={`${slide.slideNumber}-${action.type}`}>{action.reason}</li>
+                      ))}
+                    </ul>
+                    {slide.redesignPlan.mediaDecisions[0] ? (
+                      <p className="media-note">Media: {slide.redesignPlan.mediaDecisions[0].reason}</p>
+                    ) : null}
+                  </div>
                 </div>
               </article>
             ))}
