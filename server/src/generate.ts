@@ -26,7 +26,7 @@ async function createRecord(table: string, fields: Record<string, any>) {
   return data.records[0];
 }
 
-async function patchRecords(table: string, records: Array<{ id: string; fields: Record<string, any> }>) {
+export async function patchRecords(table: string, records: Array<{ id: string; fields: Record<string, any> }>) {
   const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(table)}`, {
     method: 'PATCH',
     headers,
@@ -36,7 +36,7 @@ async function patchRecords(table: string, records: Array<{ id: string; fields: 
   return response.json();
 }
 
-async function uploadAttachmentToGenerated(recordId: string, fieldIdOrName: string, filePath: string, filename: string, contentType: string) {
+export async function uploadAttachmentToGenerated(recordId: string, fieldIdOrName: string, filePath: string, filename: string, contentType: string) {
   const file = await fs.promises.readFile(filePath);
   const payload = {
     contentType,

@@ -70,6 +70,15 @@ type GeneratedPresentation = {
   generatedSlides: GeneratedSlide[];
 };
 
+type EditVariant = {
+  generatedSlideId: string;
+  prompt: string;
+  variantImageUrl: string;
+  tempFilePath: string;
+  tempFileName: string;
+  contentType: string;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 function App() {
@@ -85,6 +94,11 @@ function App() {
   const [loadingPresentation, setLoadingPresentation] = useState(false);
   const [generateResult, setGenerateResult] = useState<GenerateResult | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [applyingEdit, setApplyingEdit] = useState(false);
+  const [draftVariant, setDraftVariant] = useState<EditVariant | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -136,9 +150,36 @@ function App() {
       setIsFullscreen(document.fullscreenElement === stageRef.current);
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isTypingTarget = tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable;
+      if (isTypingTarget) return;
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        moveSelected(1);
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        moveSelected(-1);
+      }
+      if (event.key.toLowerCase() === 'f' && selectedGeneratedId) {
+        event.preventDefault();
+        void toggleFullscreen();
+      }
+      if (event.key === 'Escape' && draftVariant) {
+        setDraftVariant(null);
+      }
+    };
+
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [draftVariant, selectedGeneratedId, presentation]);
 
   const selectedDeck = useMemo(() => {
     if (!snapshot || !selectedVersion) return null;
@@ -196,7 +237,10 @@ function App() {
     if (!presentation?.generatedSlides.length || !selectedGeneratedSlide) return;
     const index = presentation.generatedSlides.findIndex((slide) => slide.id === selectedGeneratedSlide.id);
     const next = presentation.generatedSlides[index + delta];
-    if (next) setSelectedGeneratedId(next.id);
+    if (next) {
+      setSelectedGeneratedId(next.id);
+      setDraftVariant(null);
+    }
   }
 
   async function toggleFullscreen() {
@@ -209,6 +253,54 @@ function App() {
 
     await stageRef.current.requestFullscreen();
   }
+
+  async function handleEditSubmit() {
+    if (!selectedGeneratedSlide || !editPrompt.trim()) return;
+    setEditing(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/generated/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generatedSlideId: selectedGeneratedSlide.id, prompt: editPrompt.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to create edited variant');
+      setDraftVariant(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to edit current slide');
+    } finally {
+      setEditing(false);
+    }
+  }
+
+  async function handleKeepChange() {
+    if (!draftVariant) return;
+    setApplyingEdit(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/generated/edit/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draftVariant),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to apply edited variant');
+      setDraftVariant(null);
+      setEditPrompt('');
+      await refreshPresentation(selectedVersion);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to keep edited slide');
+    } finally {
+      setApplyingEdit(false);
+    }
+  }
+
+  function handleCancelDraft() {
+    setDraftVariant(null);
+  }
+
+  const displayedImageUrl = draftVariant?.variantImageUrl || selectedGeneratedSlide?.previewImageUrl || '';
 
   return (
     <div className="shell compiler-shell">
@@ -268,6 +360,7 @@ function App() {
             </div>
             <div className="viewer-toolbar">
               <span className="status-pill subtle">{loadingPresentation ? 'Loading presentation…' : `${presentation?.generatedCount || 0} slides viewable`}</span>
+              <span className="status-pill subtle">← / → navigate</span>
               <button onClick={() => moveSelected(-1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[0]?.id === selectedGeneratedSlide.id}>Previous</button>
               <button onClick={() => moveSelected(1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[presentation.generatedSlides.length - 1]?.id === selectedGeneratedSlide.id}>Next</button>
               <button onClick={toggleFullscreen} disabled={!selectedGeneratedSlide}>{isFullscreen ? 'Exit Full Screen' : 'Full Screen'}</button>
@@ -275,21 +368,26 @@ function App() {
           </div>
 
           <div className="viewer-grid">
-            <aside className="filmstrip">
-              {(presentation?.generatedSlides || []).map((slide) => (
-                <button
-                  key={slide.id}
-                  className={`thumb-card ${slide.id === selectedGeneratedId ? 'active' : ''}`}
-                  onClick={() => setSelectedGeneratedId(slide.id)}
-                >
-                  {slide.previewImageUrl ? <img src={slide.previewImageUrl} alt={slide.name} /> : <div className="thumb-placeholder">No preview</div>}
-                  <div className="thumb-meta">
-                    <strong>{slide.slideNumber || '—'}</strong>
-                    <span>{slide.status}</span>
-                  </div>
-                </button>
-              ))}
-            </aside>
+            {!isFullscreen ? (
+              <aside className="filmstrip">
+                {(presentation?.generatedSlides || []).map((slide) => (
+                  <button
+                    key={slide.id}
+                    className={`thumb-card ${slide.id === selectedGeneratedId ? 'active' : ''}`}
+                    onClick={() => {
+                      setSelectedGeneratedId(slide.id);
+                      setDraftVariant(null);
+                    }}
+                  >
+                    {slide.previewImageUrl ? <img src={slide.previewImageUrl} alt={slide.name} /> : <div className="thumb-placeholder">No preview</div>}
+                    <div className="thumb-meta">
+                      <strong>{slide.slideNumber || '—'}</strong>
+                      <span>{slide.status}</span>
+                    </div>
+                  </button>
+                ))}
+              </aside>
+            ) : null}
 
             <section className={`presentation-stage ${isFullscreen ? 'is-fullscreen' : ''}`} ref={stageRef}>
               <div className="stage-topline">
@@ -301,48 +399,82 @@ function App() {
               </div>
 
               <div className="stage-canvas-wrap">
-                {selectedGeneratedSlide?.previewImageUrl ? (
-                  <img className="stage-canvas" src={selectedGeneratedSlide.previewImageUrl} alt={selectedGeneratedSlide.name} />
+                {displayedImageUrl ? (
+                  <img className="stage-canvas" src={displayedImageUrl} alt={selectedGeneratedSlide?.name || 'slide'} />
                 ) : (
                   <div className="stage-empty">Generate a version to start viewing the presentation.</div>
                 )}
               </div>
+
+              {isFullscreen ? (
+                <div className={`edit-assistant ${chatOpen ? 'open' : ''}`}>
+                  {!chatOpen ? (
+                    <button className="chat-fab" onClick={() => setChatOpen(true)}>Edit Slide</button>
+                  ) : (
+                    <div className="chat-dock">
+                      <div className="chat-dock-header">
+                        <strong>Slide edit assist</strong>
+                        <button className="ghost-btn" onClick={() => setChatOpen(false)}>Close</button>
+                      </div>
+                      <textarea
+                        value={editPrompt}
+                        onChange={(e) => setEditPrompt(e.target.value)}
+                        placeholder="e.g. Make the headline larger, reduce the background clutter, and make the players feel more premium and cinematic."
+                      />
+                      <div className="chat-actions">
+                        <button onClick={handleEditSubmit} disabled={!selectedGeneratedSlide || !editPrompt.trim() || editing}>{editing ? 'Generating edit…' : 'Generate edit'}</button>
+                      </div>
+                      {draftVariant ? (
+                        <div className="draft-actions">
+                          <p>Draft ready — keep this change or cancel and keep the current slide.</p>
+                          <div className="chat-actions">
+                            <button onClick={handleKeepChange} disabled={applyingEdit}>{applyingEdit ? 'Keeping…' : 'Keep change'}</button>
+                            <button className="ghost-btn" onClick={handleCancelDraft} disabled={applyingEdit}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </section>
 
-            <aside className="review-panel">
-              <div className="review-card">
-                <p className="eyebrow">Generation metadata</p>
-                <h3>Review context</h3>
-                <ul className="plain-list compact">
-                  <li><strong>Status:</strong> {selectedGeneratedSlide?.status || '—'}</li>
-                  <li><strong>Model:</strong> {selectedGeneratedSlide?.model || generateResult?.model || '—'}</li>
-                  <li><strong>Iteration:</strong> {selectedGeneratedSlide?.iterationNumber || '—'}</li>
-                  <li><strong>Render runs:</strong> {selectedGeneratedSlide?.renderRunIds.length || 0}</li>
-                </ul>
-              </div>
-
-              <div className="review-card">
-                <p className="eyebrow">Prompt summary</p>
-                <h3>What drove this slide</h3>
-                <ul className="plain-list compact">
-                  {selectedPromptLines.length ? selectedPromptLines.map((line, index) => <li key={index}>{line}</li>) : <li>No prompt summary found.</li>}
-                </ul>
-              </div>
-
-              <div className="review-card">
-                <p className="eyebrow">Compiled slide plan</p>
-                <h3>Source row translated</h3>
-                {selectedCompiledSlide ? (
+            {!isFullscreen ? (
+              <aside className="review-panel">
+                <div className="review-card">
+                  <p className="eyebrow">Generation metadata</p>
+                  <h3>Review context</h3>
                   <ul className="plain-list compact">
-                    <li><strong>Title:</strong> {selectedCompiledSlide.title}</li>
-                    <li><strong>Template:</strong> {selectedCompiledSlide.targetTemplate}</li>
-                    <li><strong>Intent:</strong> {selectedCompiledSlide.intent}</li>
-                    <li><strong>Section:</strong> {selectedCompiledSlide.section}</li>
-                    <li><strong>References:</strong> {(selectedCompiledSlide.linkedReferences || []).map((ref) => ref.name).join(' · ') || '—'}</li>
+                    <li><strong>Status:</strong> {selectedGeneratedSlide?.status || '—'}</li>
+                    <li><strong>Model:</strong> {selectedGeneratedSlide?.model || generateResult?.model || '—'}</li>
+                    <li><strong>Iteration:</strong> {selectedGeneratedSlide?.iterationNumber || '—'}</li>
+                    <li><strong>Render runs:</strong> {selectedGeneratedSlide?.renderRunIds.length || 0}</li>
                   </ul>
-                ) : <p className="media-note">No compiled plan matched this generated slide.</p>}
-              </div>
-            </aside>
+                </div>
+
+                <div className="review-card">
+                  <p className="eyebrow">Prompt summary</p>
+                  <h3>What drove this slide</h3>
+                  <ul className="plain-list compact">
+                    {selectedPromptLines.length ? selectedPromptLines.map((line, index) => <li key={index}>{line}</li>) : <li>No prompt summary found.</li>}
+                  </ul>
+                </div>
+
+                <div className="review-card">
+                  <p className="eyebrow">Compiled slide plan</p>
+                  <h3>Source row translated</h3>
+                  {selectedCompiledSlide ? (
+                    <ul className="plain-list compact">
+                      <li><strong>Title:</strong> {selectedCompiledSlide.title}</li>
+                      <li><strong>Template:</strong> {selectedCompiledSlide.targetTemplate}</li>
+                      <li><strong>Intent:</strong> {selectedCompiledSlide.intent}</li>
+                      <li><strong>Section:</strong> {selectedCompiledSlide.section}</li>
+                      <li><strong>References:</strong> {(selectedCompiledSlide.linkedReferences || []).map((ref) => ref.name).join(' · ') || '—'}</li>
+                    </ul>
+                  ) : <p className="media-note">No compiled plan matched this generated slide.</p>}
+                </div>
+              </aside>
+            ) : null}
           </div>
         </section>
 
@@ -363,45 +495,6 @@ function App() {
               </article>
             ))}
           </div>
-        </section>
-
-        <section className="principles">
-          <div>
-            <p className="eyebrow">Generation system</p>
-            <h2>The rules driving Nano Banana 2</h2>
-          </div>
-          <ul className="plain-list">
-            <li><strong>Layout:</strong> {spec?.designFormulaSystem.layout.primarySplit}</li>
-            <li><strong>Typography:</strong> modular scales {(spec?.designFormulaSystem.typography.modularScale || []).join(' / ')}</li>
-            <li><strong>Spacing:</strong> {spec?.designFormulaSystem.spacing.rhythm} → {(spec?.designFormulaSystem.spacing.steps || []).join(', ')}</li>
-            <li><strong>Performance:</strong> {spec?.designFormulaSystem.performance.contextWindow}</li>
-          </ul>
-        </section>
-
-        <section className="schema-table-wrap">
-          <h3 className="inline-title">Generation plan</h3>
-          <table className="schema-table">
-            <thead>
-              <tr>
-                <th>Slide</th>
-                <th>Title</th>
-                <th>Template</th>
-                <th>Rolling context</th>
-                <th>References</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(compiled?.compiledSlides || []).map((slide) => (
-                <tr key={slide.slideNumber}>
-                  <td>{slide.slideNumber}</td>
-                  <td>{slide.title}</td>
-                  <td><code>{slide.targetTemplate}</code></td>
-                  <td>{slide.rollingContext.map((item) => item.slide_number).join(' → ')}</td>
-                  <td>{(slide.linkedReferences || []).map((ref) => ref.name).join(' · ') || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </section>
       </main>
     </div>

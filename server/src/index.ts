@@ -12,6 +12,7 @@ import { compilerStages, deckRowSchema, rollingWindowRule, designFormulaSystem }
 import { ingestDeckRows } from './compiler';
 import { compileFromAirtable, getAirtableSnapshot, getGeneratedPresentation } from './airtable';
 import { generateFromAirtable } from './generate';
+import { applyEditedSlideVariant, createEditedSlideVariant } from './edit';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -261,6 +262,37 @@ app.get('/api/generated/from-airtable', async (req, res) => {
     return res.json(presentation);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load generated presentation from Airtable.' });
+  }
+});
+
+app.post('/api/generated/edit', async (req, res) => {
+  try {
+    const generatedSlideId = typeof req.body?.generatedSlideId === 'string' ? req.body.generatedSlideId : '';
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
+    if (!generatedSlideId || !prompt.trim()) {
+      return res.status(400).json({ error: 'generatedSlideId and prompt are required.' });
+    }
+    const result = await createEditedSlideVariant(generatedSlideId, prompt.trim());
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to create edited slide variant.' });
+  }
+});
+
+app.post('/api/generated/edit/apply', async (req, res) => {
+  try {
+    const generatedSlideId = typeof req.body?.generatedSlideId === 'string' ? req.body.generatedSlideId : '';
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
+    const tempFilePath = typeof req.body?.tempFilePath === 'string' ? req.body.tempFilePath : '';
+    const tempFileName = typeof req.body?.tempFileName === 'string' ? req.body.tempFileName : '';
+    const contentType = typeof req.body?.contentType === 'string' ? req.body.contentType : '';
+    if (!generatedSlideId || !prompt || !tempFilePath || !tempFileName || !contentType) {
+      return res.status(400).json({ error: 'generatedSlideId, prompt, tempFilePath, tempFileName, and contentType are required.' });
+    }
+    const result = await applyEditedSlideVariant({ generatedSlideId, prompt, tempFilePath, tempFileName, contentType });
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to apply edited slide variant.' });
   }
 });
 

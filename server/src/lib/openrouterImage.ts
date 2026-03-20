@@ -15,6 +15,7 @@ export type OpenRouterImageRequest = {
   prompt: string;
   references?: OpenRouterReferenceImage[];
   aspectRatio?: string;
+  outputFormat?: 'file' | 'data-url';
 };
 
 function normalizeDataUrl(dataUrl: string) {
@@ -97,5 +98,6 @@ export async function generateImageViaOpenRouter(request: OpenRouterImageRequest
     fileName,
     contentType: parsed.mimeType,
     assistantText: message?.content || '',
+    dataUrl: `data:${parsed.mimeType};base64,${parsed.base64}`,
   };
 }

@@ -178,3 +178,26 @@ export async function getGeneratedPresentation(versionId?: string) {
     generatedSlides: filteredSlides,
   };
 }
+
+export async function getGeneratedSlideById(generatedSlideId: string) {
+  if (!AIRTABLE_TOKEN) throw new Error('Airtable token not configured on the server.');
+
+  const records = await listAll('Generated Slides');
+  const record = records.find((item) => item.id === generatedSlideId);
+  if (!record) throw new Error('Generated slide not found.');
+
+  return {
+    id: record.id,
+    name: record.fields['Generated Slide Name'] || 'Generated Slide',
+    status: record.fields.Status || '',
+    promptSummary: record.fields['Prompt Summary'] || '',
+    layoutJson: record.fields['Layout JSON'] || '',
+    notes: record.fields.Notes || '',
+    model: record.fields.Model || '',
+    previewImageUrl: record.fields['Preview Image']?.[0]?.url || '',
+    deckVersionIds: record.fields['Deck Version'] || [],
+    slideRowIds: record.fields['Slide Row'] || [],
+    renderRunIds: record.fields['Render Run'] || [],
+    iterationNumber: Number(record.fields['Iteration Number'] || 1),
+  };
+}
