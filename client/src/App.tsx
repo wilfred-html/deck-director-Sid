@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
 type SchemaField = { key: string; label: string; required: boolean; description: string; example?: string };
@@ -84,6 +84,8 @@ function App() {
   const [generating, setGenerating] = useState(false);
   const [loadingPresentation, setLoadingPresentation] = useState(false);
   const [generateResult, setGenerateResult] = useState<GenerateResult | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const stageRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -128,6 +130,15 @@ function App() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load generated presentation'))
       .finally(() => setLoadingPresentation(false));
   }, [selectedVersion]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === stageRef.current);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   const selectedDeck = useMemo(() => {
     if (!snapshot || !selectedVersion) return null;
@@ -186,6 +197,17 @@ function App() {
     const index = presentation.generatedSlides.findIndex((slide) => slide.id === selectedGeneratedSlide.id);
     const next = presentation.generatedSlides[index + delta];
     if (next) setSelectedGeneratedId(next.id);
+  }
+
+  async function toggleFullscreen() {
+    if (!stageRef.current) return;
+
+    if (document.fullscreenElement === stageRef.current) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await stageRef.current.requestFullscreen();
   }
 
   return (
@@ -248,6 +270,7 @@ function App() {
               <span className="status-pill subtle">{loadingPresentation ? 'Loading presentation…' : `${presentation?.generatedCount || 0} slides viewable`}</span>
               <button onClick={() => moveSelected(-1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[0]?.id === selectedGeneratedSlide.id}>Previous</button>
               <button onClick={() => moveSelected(1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[presentation.generatedSlides.length - 1]?.id === selectedGeneratedSlide.id}>Next</button>
+              <button onClick={toggleFullscreen} disabled={!selectedGeneratedSlide}>{isFullscreen ? 'Exit Full Screen' : 'Full Screen'}</button>
             </div>
           </div>
 
@@ -268,7 +291,7 @@ function App() {
               ))}
             </aside>
 
-            <section className="presentation-stage">
+            <section className={`presentation-stage ${isFullscreen ? 'is-fullscreen' : ''}`} ref={stageRef}>
               <div className="stage-topline">
                 <div>
                   <p className="eyebrow">Slide focus</p>
