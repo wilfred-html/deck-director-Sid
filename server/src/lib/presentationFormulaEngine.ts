@@ -1,4 +1,5 @@
 import { templateLibrary } from '../schemas/template';
+import { deriveImageryDecision, type ImageryDecision } from './imageryDecisionEngine';
 
 export type GenerationSlide = {
   slideNumber: number;
@@ -38,6 +39,7 @@ export interface PresentationFormulaDecision {
   compositionGuidance: string[];
   hierarchyFormula: string[];
   cognitiveRules: string[];
+  imagery: ImageryDecision;
   densityLimits: {
     maxTitleWords: number;
     maxBodyWords: number;
@@ -262,6 +264,7 @@ export function derivePresentationFormula(slide: GenerationSlide): PresentationF
     compositionGuidance: composition.guidance,
     hierarchyFormula: hierarchyFor(archetype),
     cognitiveRules: cognitiveRulesFor(archetype),
+    imagery: deriveImageryDecision(slide, archetype),
     densityLimits,
     focalIsolate: focalIsolateFor(archetype, slide),
     pacingRole: pacingRoleFor(archetype, slide.slideNumber),
