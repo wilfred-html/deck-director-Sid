@@ -106,6 +106,7 @@ function App() {
   const [showBatchImport, setShowBatchImport] = useState(false);
   const [globalEditing, setGlobalEditing] = useState(false);
   const [globalEditPrompt, setGlobalEditPrompt] = useState('');
+  const [excludeLogos, setExcludeLogos] = useState(false);
   const stageRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const batchFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -227,7 +228,7 @@ function App() {
       const response = await fetch(`${API_BASE}/api/generate/from-airtable`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ versionId: selectedVersion }),
+        body: JSON.stringify({ versionId: selectedVersion, excludeLogos }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to generate');
@@ -465,6 +466,10 @@ function App() {
                   <option key={version.id} value={version.id}>{version.name} · {version.status}</option>
                 ))}
               </select>
+              <label className="toggle-label">
+                <input type="checkbox" checked={excludeLogos} onChange={(e) => setExcludeLogos(e.target.checked)} />
+                <span>Exclude logos</span>
+              </label>
               <button onClick={handleGenerate} disabled={!selectedVersion || generating}>{generating ? 'Generating with Nano Banana 2…' : 'Generate Slides'}</button>
               <button onClick={() => setShowBatchImport(true)}>Batch Import</button>
               <span className="status-pill">{busy ? 'Compiling prompt package…' : generating ? 'Generating + writing back to Airtable…' : 'AI-ready from Airtable'}</span>

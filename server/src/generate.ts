@@ -90,7 +90,7 @@ function buildLayoutJson(slide: any) {
   }, null, 2);
 }
 
-export async function generateFromAirtable(versionId?: string) {
+export async function generateFromAirtable(versionId?: string, excludeLogos?: boolean) {
   if (!AIRTABLE_TOKEN) throw new Error('Airtable token not configured on server.');
 
   const compiled = await compileFromAirtable(versionId);
@@ -119,8 +119,8 @@ export async function generateFromAirtable(versionId?: string) {
   try {
     for (const slide of compiled.compiledSlides) {
       const sourceRow = slideRowByNumber.get(slide.slideNumber);
-      const prompt = buildGenerationPrompt(slide);
-      const promptPackage = buildPromptPackage(slide);
+      const prompt = buildGenerationPrompt(slide, excludeLogos);
+      const promptPackage = buildPromptPackage(slide, excludeLogos);
 
       const generated = await createRecord('Generated Slides', {
         'Generated Slide Name': `V${targetVersionId.slice(-4)} / Slide ${slide.slideNumber}`,

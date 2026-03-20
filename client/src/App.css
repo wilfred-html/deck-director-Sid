@@ -169,6 +169,23 @@ button:disabled {
 .review-card h3 { margin: 8px 0 0; }
 .plain-list { margin: 0; padding-left: 18px; line-height: 1.65; }
 .plain-list.compact { display: grid; gap: 7px; }
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #eef2ff;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+.toggle-label span {
+  white-space: nowrap;
+}
 .control-row,
 .viewer-toolbar,
 .stage-topline,

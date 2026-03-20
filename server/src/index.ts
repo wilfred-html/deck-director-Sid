@@ -253,7 +253,8 @@ app.get('/api/compiler/from-airtable', async (req, res) => {
 app.post('/api/generate/from-airtable', async (req, res) => {
   try {
     const versionId = typeof req.body?.versionId === 'string' ? req.body.versionId : undefined;
-    const result = await generateFromAirtable(versionId);
+    const excludeLogos = req.body?.excludeLogos === true;
+    const result = await generateFromAirtable(versionId, excludeLogos);
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate from Airtable.' });

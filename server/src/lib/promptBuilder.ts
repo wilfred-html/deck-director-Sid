@@ -1,6 +1,6 @@
 import { derivePresentationFormula, type GenerationSlide } from './presentationFormulaEngine';
 
-export function buildPromptPackage(slide: GenerationSlide) {
+export function buildPromptPackage(slide: GenerationSlide, excludeLogos?: boolean) {
   const formula = derivePresentationFormula(slide);
   const referenceSummary = (slide.linkedReferences || []).map((reference) => ({
     name: reference.name,
@@ -67,12 +67,13 @@ export function buildPromptPackage(slide: GenerationSlide) {
       'Prioritize design quality over decorative excess.',
       'One slide should communicate one dominant idea.',
       'Use one memorable isolate, not many competing highlights.',
+      ...(excludeLogos ? ['Do not include any logos, brand marks, or sponsor graphics. Generate clean slides without branding.'] : []),
     ],
   };
 }
 
-export function buildGenerationPrompt(slide: GenerationSlide) {
-  const promptPackage = buildPromptPackage(slide);
+export function buildGenerationPrompt(slide: GenerationSlide, excludeLogos?: boolean) {
+  const promptPackage = buildPromptPackage(slide, excludeLogos);
   const formula = promptPackage.formula;
 
   return [
