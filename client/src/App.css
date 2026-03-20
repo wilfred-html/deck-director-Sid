@@ -270,6 +270,15 @@ textarea {
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 .ref-toggle.active { background: rgba(251, 191, 36, 0.2); border-color: #fbbf24; }
+.batch-import-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  display: grid;
+  gap: 10px;
+}
 .thumb-card img,
 .thumb-placeholder {
   width: 100%;

@@ -3,7 +3,8 @@
 ## Current implementation status
 
 **Phase 1** (manual extraction + AI redesign): ✅ Ready to use  
-**Phase 2** (automatic extraction): 🚧 Coming next
+**Phase 2** (batch upload): ✅ Ready to use  
+**Phase 3** (automatic PPTX extraction): 🚧 Coming next
 
 ## How to use it now (manual workflow)
 

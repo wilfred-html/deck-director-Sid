@@ -15,6 +15,7 @@ import { generateFromAirtable } from './generate';
 import { applyEditedSlideVariant, createEditedSlideVariant } from './edit';
 import { preparePPTXForExtraction } from './pptxIngestion';
 import { bulkRegenerateSlides } from './bulkRegenerate';
+import { batchImportSlides } from './batchImport';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -313,6 +314,35 @@ app.post('/api/bulk/regenerate', async (req, res) => {
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to bulk regenerate slides.' });
+  }
+});
+
+app.post('/api/batch/import', upload.array('slides', 200), async (req, res) => {
+  try {
+    if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      return res.status(400).json({ error: 'No slide images uploaded.' });
+    }
+
+    const deckName = typeof req.body?.deckName === 'string' ? req.body.deckName : 'Imported Deck';
+    const versionName = typeof req.body?.versionName === 'string' ? req.body.versionName : `Import ${new Date().toISOString().slice(0, 10)}`;
+    const deckId = typeof req.body?.deckId === 'string' ? req.body.deckId : undefined;
+
+    const slides = req.files
+      .map((file, index) => ({
+        slideNumber: index + 1,
+        imagePath: file.path,
+        contentType: file.mimetype,
+      }))
+      .sort((a, b) => {
+        const nameA = req.files && Array.isArray(req.files) ? req.files[a.slideNumber - 1].originalname : '';
+        const nameB = req.files && Array.isArray(req.files) ? req.files[b.slideNumber - 1].originalname : '';
+        return nameA.localeCompare(nameB);
+      });
+
+    const result = await batchImportSlides(deckName, versionName, slides, deckId);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to batch import slides.' });
   }
 });
 

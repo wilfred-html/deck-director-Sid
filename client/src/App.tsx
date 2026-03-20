@@ -102,8 +102,11 @@ function App() {
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [selectedReferenceSlides, setSelectedReferenceSlides] = useState<Set<string>>(new Set());
   const [bulkRegenerating, setBulkRegenerating] = useState(false);
+  const [batchImporting, setBatchImporting] = useState(false);
+  const [showBatchImport, setShowBatchImport] = useState(false);
   const stageRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const batchFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -361,6 +364,36 @@ function App() {
     }
   }
 
+  async function handleBatchImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setBatchImporting(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => {
+        formData.append('slides', file);
+      });
+      formData.append('deckName', selectedDeck?.name || 'Imported Deck');
+      formData.append('versionName', `Import ${new Date().toISOString().slice(0, 10)}`);
+
+      const response = await fetch(`${API_BASE}/api/batch/import`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to batch import');
+      
+      setSelectedVersion(data.versionId);
+      setShowBatchImport(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to batch import slides');
+    } finally {
+      setBatchImporting(false);
+    }
+  }
+
   const displayedImageUrl = draftVariant?.variantImageUrl || selectedGeneratedSlide?.previewImageUrl || '';
 
   return (
@@ -406,8 +439,26 @@ function App() {
                 ))}
               </select>
               <button onClick={handleGenerate} disabled={!selectedVersion || generating}>{generating ? 'Generating with Nano Banana 2…' : 'Generate Slides'}</button>
+              <button onClick={() => setShowBatchImport(true)}>Batch Import</button>
               <span className="status-pill">{busy ? 'Compiling prompt package…' : generating ? 'Generating + writing back to Airtable…' : 'AI-ready from Airtable'}</span>
             </div>
+            {showBatchImport ? (
+              <div className="batch-import-panel">
+                <input
+                  type="file"
+                  ref={batchFileInputRef}
+                  onChange={handleBatchImport}
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                />
+                <p><strong>Batch import slides:</strong> Select all slide images (e.g., slide-001.png through slide-086.png) and they'll be imported as a new deck version.</p>
+                <div className="chat-actions">
+                  <button onClick={() => batchFileInputRef.current?.click()} disabled={batchImporting}>{batchImporting ? 'Importing…' : 'Choose images'}</button>
+                  <button className="ghost-btn" onClick={() => setShowBatchImport(false)} disabled={batchImporting}>Cancel</button>
+                </div>
+              </div>
+            ) : null}
             <p className="media-note">{selectedDeck?.description || spec?.summary}</p>
             {generateResult ? <p className="media-note">Last run: {generateResult.runId} · {generateResult.generatedCount} generated slide records written using {generateResult.engine || 'nano-banana-2'} / {generateResult.model}.</p> : null}
           </div>
