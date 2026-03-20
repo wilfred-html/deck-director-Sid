@@ -8,6 +8,7 @@ import { promisify } from 'util';
 import { buildRedesignPlan } from './lib/redesignPlanner';
 import { classifyMediaFromContext } from './lib/media';
 import type { SlideModel } from './schemas/slide';
+import { compilerStages, deckRowSchema, rollingWindowRule } from './deckCompilerSpec';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -195,6 +196,16 @@ async function runDeckAudit(filePath: string, originalName: string) {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'deck-director-api' });
+});
+
+app.get('/api/compiler/spec', (_req, res) => {
+  res.json({
+    productDirection: 'row-driven deck compiler',
+    summary: 'Deck Director is being rehauled from audit-first tooling into a spreadsheet-driven deck generation system with rolling local context and fixed global design memory.',
+    rollingWindowRule,
+    deckRowSchema,
+    compilerStages,
+  });
 });
 
 app.post('/api/audits', upload.single('deck'), async (req, res) => {
