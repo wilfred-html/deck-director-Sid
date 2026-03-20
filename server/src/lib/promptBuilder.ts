@@ -1,20 +1,7 @@
-export type GenerationSlide = {
-  slideNumber: number;
-  section: string;
-  intent: string;
-  targetTemplate: string;
-  title: string;
-  subtitle?: string;
-  body?: string;
-  bullets?: string[];
-  visualBrief?: string;
-  mediaType?: string;
-  emphasis?: string;
-  rollingContext?: Array<{ slide_number: string; title: string; section: string; intent: string; layout_type: string }>;
-  linkedReferences?: Array<{ id: string; name: string; role: string; mediaWorld: string; styleNotes: string; keywords: string; imageUrl: string }>;
-};
+import { derivePresentationFormula, type GenerationSlide } from './presentationFormulaEngine';
 
 export function buildPromptPackage(slide: GenerationSlide) {
+  const formula = derivePresentationFormula(slide);
   const referenceSummary = (slide.linkedReferences || []).map((reference) => ({
     name: reference.name,
     role: reference.role,
@@ -40,16 +27,33 @@ export function buildPromptPackage(slide: GenerationSlide) {
       mediaType: slide.mediaType || 'unknown',
       emphasis: slide.emphasis || 'balanced',
     },
+    formula: {
+      archetype: formula.archetype,
+      assertion: formula.assertion,
+      evidenceType: formula.evidenceType,
+      compositionFormula: formula.compositionFormula,
+      compositionGuidance: formula.compositionGuidance,
+      hierarchyFormula: formula.hierarchyFormula,
+      cognitiveRules: formula.cognitiveRules,
+      densityLimits: formula.densityLimits,
+      focalIsolate: formula.focalIsolate,
+      pacingRole: formula.pacingRole,
+      continuityInstructions: formula.continuityInstructions,
+      warningFlags: formula.warningFlags,
+    },
     deckSystem: {
       concept: 'Premium strategic deck with editorial confidence, cinematic restraint, asymmetrical composition, and strong narrative pacing.',
       composition: 'Use presentation composition, not poster chaos. Respect margins, alignment, hierarchy, and slide readability.',
       typography: 'Big decisive headline, disciplined secondary hierarchy, compact supporting copy. Avoid tiny unreadable text walls.',
       color: 'Restrained, premium palette. Confident contrast. Avoid childish saturation unless the references clearly demand it.',
       behavior: 'This must look like a designed keynote/pitch slide, ready for review by strategy and creative leadership.',
+      scaleSystem: 'Use modular scale jumps for typography and spacing; avoid arbitrary sizing.',
+      gridSystem: 'Compose on a stable editorial grid even when the output feels organic.',
     },
     continuity: {
       rollingContext: slide.rollingContext || [],
       note: 'Use the current row and the previous two rows only for local narrative continuity. Keep the global deck system consistent across the whole deck.',
+      longDeckNote: 'This system must remain stable across long-deck generation runs such as 86 slides; preserve continuity without repetitive sameness.',
     },
     references: referenceSummary,
     hardRules: [
@@ -60,22 +64,32 @@ export function buildPromptPackage(slide: GenerationSlide) {
       'Make the slide feel presentation-native and commercially credible.',
       'If there is text on slide, keep it deliberate, minimal, and legible.',
       'Prioritize design quality over decorative excess.',
+      'One slide should communicate one dominant idea.',
+      'Use one memorable isolate, not many competing highlights.',
     ],
   };
 }
 
 export function buildGenerationPrompt(slide: GenerationSlide) {
   const promptPackage = buildPromptPackage(slide);
+  const formula = promptPackage.formula;
 
   return [
     'You are generating a finished presentation slide visual for Deck Director using Nano Banana 2.',
     'This is an AI-native slide generation workflow. Do not output code, SVG, HTML, UI screenshots, or wireframes.',
     'Generate a polished 16:9 presentation slide image that looks ready for an internal strategy/client review.',
+    'Think like a world-class presentation designer: composition, hierarchy, cognitive load, memory, and deck continuity all matter.',
     '',
     `SLIDE NUMBER: ${slide.slideNumber}`,
     `SECTION: ${slide.section}`,
     `INTENT: ${slide.intent}`,
     `TARGET TEMPLATE: ${slide.targetTemplate}`,
+    `ARCHETYPE: ${formula.archetype}`,
+    `PACING ROLE IN DECK: ${formula.pacingRole}`,
+    `ASSERTION: ${formula.assertion}`,
+    `EVIDENCE TYPE: ${formula.evidenceType}`,
+    `COMPOSITION FORMULA: ${formula.compositionFormula}`,
+    `FOCAL ISOLATE: ${formula.focalIsolate}`,
     `TITLE: ${slide.title}`,
     slide.subtitle ? `SUBTITLE: ${slide.subtitle}` : '',
     slide.body ? `BODY: ${slide.body}` : '',
@@ -84,13 +98,33 @@ export function buildGenerationPrompt(slide: GenerationSlide) {
     `MEDIA TYPE: ${slide.mediaType || 'unknown'}`,
     `EMPHASIS: ${slide.emphasis || 'balanced'}`,
     '',
+    'DENSITY LIMITS:',
+    `- max title words: ${formula.densityLimits.maxTitleWords}`,
+    `- max body words: ${formula.densityLimits.maxBodyWords}`,
+    `- max bullets: ${formula.densityLimits.maxBullets}`,
+    `- max visible clusters: ${formula.densityLimits.maxVisibleClusters}`,
+    `- max primary callouts: ${formula.densityLimits.maxPrimaryCallouts}`,
+    '',
+    'COMPOSITION GUIDANCE:',
+    ...formula.compositionGuidance.map((item: string) => `- ${item}`),
+    '',
+    'HIERARCHY RULES:',
+    ...formula.hierarchyFormula.map((item: string) => `- ${item}`),
+    '',
+    'COGNITIVE RULES:',
+    ...formula.cognitiveRules.map((item: string) => `- ${item}`),
+    '',
     'GLOBAL DECK SYSTEM:',
     '- premium editorial tone',
     '- cinematic restraint',
     '- asymmetrical composition',
     '- strong strategic hierarchy',
     '- presentation-first readability',
+    '- stable deck DNA across a long 86-slide run',
     '- avoid HTML/SVG/mockup feel completely',
+    '',
+    'CONTINUITY INSTRUCTIONS:',
+    ...formula.continuityInstructions.map((item: string) => `- ${item}`),
     '',
     'ROLLING CONTEXT:',
     ...(slide.rollingContext || []).map((item) => `- slide ${item.slide_number}: ${item.title} / ${item.section} / ${item.intent} / ${item.layout_type}`),
@@ -100,6 +134,9 @@ export function buildGenerationPrompt(slide: GenerationSlide) {
       ? (slide.linkedReferences || []).map((reference) => `- ${reference.name}: ${reference.role}; ${reference.mediaWorld}; ${reference.styleNotes}; keywords: ${reference.keywords}`)
       : ['- no linked references supplied; keep the deck premium, strategic, and presentation-native']),
     '',
+    formula.warningFlags.length ? 'WARNING FLAGS:' : '',
+    ...formula.warningFlags.map((item: string) => `- ${item}`),
+    formula.warningFlags.length ? '' : '',
     'QUALITY BAR:',
     '- looks like a serious agency/strategy deck slide',
     '- elegant layout decisions',
@@ -107,6 +144,7 @@ export function buildGenerationPrompt(slide: GenerationSlide) {
     '- restrained but confident typography',
     '- no placeholder energy',
     '- no generic app-dashboard aesthetics',
+    '- one dominant idea per slide',
     '',
     'Return the actual slide image only.',
     '',
