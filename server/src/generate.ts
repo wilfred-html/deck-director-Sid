@@ -1,5 +1,7 @@
 import fetch from 'node-fetch';
+import fs from 'fs';
 import { compileFromAirtable, getAirtableSnapshot } from './airtable';
+import { renderSlidePreview } from './render';
 
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appb1sdK2880A8HYT';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_ACCESS_TOKEN || process.env.AIRTABLE_TOKEN || '';
@@ -28,6 +30,24 @@ async function patchRecords(table: string, records: Array<{ id: string; fields: 
     body: JSON.stringify({ records }),
   });
   if (!response.ok) throw new Error(`Failed to patch Airtable records in ${table}: ${response.status}`);
+  return response.json();
+}
+
+async function uploadAttachmentToGenerated(recordId: string, fieldIdOrName: string, filePath: string, filename: string, contentType: string) {
+  const file = await fs.promises.readFile(filePath);
+  const payload = {
+    contentType,
+    filename,
+    file: file.toString('base64'),
+  };
+
+  const response = await fetch(`https://content.airtable.com/v0/${AIRTABLE_BASE_ID}/${recordId}/${fieldIdOrName}/uploadAttachment`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`Failed to upload attachment to Airtable: ${response.status}`);
   return response.json();
 }
 
@@ -95,16 +115,29 @@ export async function generateFromAirtable(versionId?: string) {
     const sourceRow = slideRowByNumber.get(slide.slideNumber);
     const generated = await createRecord('Generated Slides', {
       'Generated Slide Name': `V${targetVersionId.slice(-4)} / Slide ${slide.slideNumber}`,
-      Status: 'Succeeded',
+      Status: 'Generating',
       'Prompt Summary': buildPromptSummary(slide),
       'Layout JSON': buildLayoutJson(slide),
       Model: OPENROUTER_IMAGE_MODEL,
       'Iteration Number': 1,
-      Notes: 'Phase 1 output: structured generation record created from Airtable compile. Preview image rendering still to be added.',
+      Notes: 'Generated from Airtable compiler with visual preview attachment.',
       'Deck Version': [targetVersionId],
       ...(sourceRow ? { 'Slide Row': [sourceRow.id] } : {}),
       'Render Run': [run.id],
     });
+
+    const preview = await renderSlidePreview(slide);
+    await uploadAttachmentToGenerated(generated.id, 'Preview Image', preview.filePath, preview.fileName, preview.contentType);
+    if (sourceRow?.id) {
+      await uploadAttachmentToGenerated(sourceRow.id, 'Generated Preview', preview.filePath, preview.fileName, preview.contentType);
+    }
+
+    await patchRecords('Generated Slides', [{
+      id: generated.id,
+      fields: {
+        Status: 'Succeeded',
+      },
+    }]);
 
     generatedRecords.push({ slideNumber: slide.slideNumber, generatedId: generated.id, slideRowId: sourceRow?.id });
   }
