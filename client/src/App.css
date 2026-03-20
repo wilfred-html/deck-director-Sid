@@ -179,6 +179,67 @@ button, input { font: inherit; }
   line-height: 1.7;
 }
 
+.control-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+select {
+  background: #0f172a;
+  color: #eef2ff;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 280px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: #1e293b;
+  color: #93c5fd;
+  font-size: 0.85rem;
+}
+
+.ref-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ref-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.ref-card img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+.ref-card div {
+  padding: 12px;
+}
+
+.ref-card p,
+.ref-card small {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.inline-title {
+  margin: 0 0 12px;
+}
+
 .schema-table {
   width: 100%;
   border-collapse: collapse;

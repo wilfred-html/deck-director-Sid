@@ -10,6 +10,7 @@ import { classifyMediaFromContext } from './lib/media';
 import type { SlideModel } from './schemas/slide';
 import { compilerStages, deckRowSchema, rollingWindowRule, designFormulaSystem } from './deckCompilerSpec';
 import { ingestDeckRows } from './compiler';
+import { compileFromAirtable, getAirtableSnapshot } from './airtable';
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -221,6 +222,24 @@ app.get('/api/compiler/spec', (_req, res) => {
     compilerStages,
     designFormulaSystem,
   });
+});
+
+app.get('/api/airtable/snapshot', async (_req, res) => {
+  try {
+    const snapshot = await getAirtableSnapshot();
+    return res.json(snapshot);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to fetch Airtable snapshot.' });
+  }
+});
+
+app.get('/api/compiler/from-airtable', async (req, res) => {
+  try {
+    const compiled = await compileFromAirtable(typeof req.query.versionId === 'string' ? req.query.versionId : undefined);
+    return res.json(compiled);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to compile from Airtable.' });
+  }
 });
 
 app.post('/api/compiler/ingest', upload.single('sheet'), async (req, res) => {
