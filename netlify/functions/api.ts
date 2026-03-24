@@ -15,6 +15,7 @@ import { applyEditedSlideVariant, createEditedSlideVariant } from '../../server/
 import { bulkRegenerateSlides } from '../../server/src/bulkRegenerate';
 import { batchImportSlides } from '../../server/src/batchImport';
 import { applyGlobalEdit } from '../../server/src/globalEdit';
+import { initRenderRun, generateSingleSlide, finalizeRenderRun } from '../../server/src/generateSingle';
 
 const app = express();
 const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview';
@@ -153,6 +154,46 @@ app.post('/api/global/edit', async (req, res) => {
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to apply global edit.' });
+  }
+});
+
+// Single-slide generation endpoints (avoids Netlify 26s timeout)
+app.post('/api/generate/init-run', async (req, res) => {
+  try {
+    const versionId = typeof req.body?.versionId === 'string' ? req.body.versionId : '';
+    const totalSlides = typeof req.body?.totalSlides === 'number' ? req.body.totalSlides : 0;
+    if (!versionId) return res.status(400).json({ error: 'versionId is required.' });
+    const result = await initRenderRun(versionId, totalSlides);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to init render run.' });
+  }
+});
+
+app.post('/api/generate/single', async (req, res) => {
+  try {
+    const versionId = typeof req.body?.versionId === 'string' ? req.body.versionId : '';
+    const slideNumber = typeof req.body?.slideNumber === 'number' ? req.body.slideNumber : 0;
+    const runId = typeof req.body?.runId === 'string' ? req.body.runId : undefined;
+    const excludeLogos = req.body?.excludeLogos === true;
+    if (!versionId || !slideNumber) return res.status(400).json({ error: 'versionId and slideNumber are required.' });
+    const result = await generateSingleSlide(versionId, slideNumber, runId, excludeLogos);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate slide.' });
+  }
+});
+
+app.post('/api/generate/finalize-run', async (req, res) => {
+  try {
+    const runId = typeof req.body?.runId === 'string' ? req.body.runId : '';
+    const generatedCount = typeof req.body?.generatedCount === 'number' ? req.body.generatedCount : 0;
+    const versionId = typeof req.body?.versionId === 'string' ? req.body.versionId : '';
+    if (!runId) return res.status(400).json({ error: 'runId is required.' });
+    await finalizeRenderRun(runId, generatedCount, versionId);
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to finalize run.' });
   }
 });
 
