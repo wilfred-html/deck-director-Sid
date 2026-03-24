@@ -23,6 +23,7 @@
     "pdfjs-dist": "^5.5.207",
     "pptx-compose": "^1.0.0",
     "pptxgenjs": "^4.0.1",
+    "serverless-http": "^4.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -79,7 +79,7 @@ type EditVariant = {
   contentType: string;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 function App() {
   const [spec, setSpec] = useState<CompilerSpec | null>(null);
