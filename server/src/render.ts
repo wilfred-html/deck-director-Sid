@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const PREVIEW_DIR = path.join(process.cwd(), 'generated-previews');
+const PREVIEW_DIR = path.join(process.env.LAMBDA_TASK_ROOT ? '/tmp' : process.cwd(), 'generated-previews');
 
 function esc(value: string) {
   return value

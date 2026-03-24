@@ -1,6 +1,9 @@
 import serverless from 'serverless-http';
 import cors from 'cors';
 import express from 'express';
+
+// Ensure Netlify Functions use /tmp for writable paths
+process.env.LAMBDA_TASK_ROOT = process.env.LAMBDA_TASK_ROOT || '/var/task';
 import { buildRedesignPlan } from '../../server/src/lib/redesignPlanner';
 import { classifyMediaFromContext } from '../../server/src/lib/media';
 import type { SlideModel } from '../../server/src/schemas/slide';

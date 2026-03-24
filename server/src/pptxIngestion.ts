@@ -3,8 +3,9 @@ import path from 'path';
 import { spawn } from 'child_process';
 import AdmZip from 'adm-zip';
 
-const PPTX_STAGING_DIR = path.join(process.cwd(), 'pptx-staging');
-const PPTX_EXTRACTS_DIR = path.join(process.cwd(), 'pptx-extracts');
+const BASE_DIR = process.env.LAMBDA_TASK_ROOT ? '/tmp' : process.cwd();
+const PPTX_STAGING_DIR = path.join(BASE_DIR, 'pptx-staging');
+const PPTX_EXTRACTS_DIR = path.join(BASE_DIR, 'pptx-extracts');
 
 export type PPTXSlideExtract = {
   slideNumber: number;
