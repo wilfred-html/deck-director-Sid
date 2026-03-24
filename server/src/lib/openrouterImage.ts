@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const OUTPUT_DIR = path.join(process.cwd(), 'generated-ai');
+const OUTPUT_DIR = path.join(process.env.LAMBDA_TASK_ROOT ? '/tmp' : process.cwd(), 'generated-ai');
 
 export type OpenRouterReferenceImage = {
   url: string;
