@@ -25,17 +25,31 @@ const HAS_AIRTABLE_TOKEN = Boolean(process.env.AIRTABLE_ACCESS_TOKEN || process.
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appb1sdK2880A8HYT';
 
 app.use(cors({ origin: true }));
-app.use(express.json({ limit: '10mb' }));
 
-// Netlify passes body as Buffer — parse it if express.json() didn't
+// Netlify/serverless-http passes body as Buffer object {type:"Buffer",data:[...]}
+// Must parse BEFORE express.json() since express.json() treats it as valid JSON
 app.use((req: any, _res: any, next: any) => {
-  if (req.body && req.body.type === 'Buffer' && Array.isArray(req.body.data)) {
-    try {
-      req.body = JSON.parse(Buffer.from(req.body.data).toString('utf8'));
-    } catch { /* leave as-is */ }
+  if (req.body && typeof req.body === 'object') {
+    // Already a Buffer-like object from serverless-http
+    if (req.body.type === 'Buffer' && Array.isArray(req.body.data)) {
+      try {
+        req.body = JSON.parse(Buffer.from(req.body.data).toString('utf8'));
+      } catch { /* leave as-is */ }
+      return next();
+    }
+    // If it has numeric keys (Buffer serialized differently)
+    if (req.body['0'] !== undefined && !req.body.versionId) {
+      try {
+        const arr = Object.keys(req.body).sort((a,b) => Number(a) - Number(b)).map(k => req.body[k]);
+        req.body = JSON.parse(Buffer.from(arr).toString('utf8'));
+      } catch { /* leave as-is */ }
+      return next();
+    }
   }
   next();
 });
+
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({
