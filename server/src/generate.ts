@@ -116,11 +116,34 @@ export async function generateFromAirtable(versionId?: string, excludeLogos?: bo
 
   const generatedRecords: Array<{ slideNumber: number; generatedId: string; slideRowId?: string }> = [];
 
+  // Visual chaining: store generated slide data URLs for lookback
+  const LOOKBACK = 2;
+  const generatedDataUrls: Array<{ slideNumber: number; dataUrl: string }> = [];
+
   try {
     for (const slide of compiled.compiledSlides) {
       const sourceRow = slideRowByNumber.get(slide.slideNumber);
       const prompt = buildGenerationPrompt(slide, excludeLogos);
       const promptPackage = buildPromptPackage(slide, excludeLogos);
+
+      // Build references: design references + previous generated slides
+      const designRefs = (slide.linkedReferences || [])
+        .filter((reference: any) => reference?.imageUrl)
+        .slice(0, 3)
+        .map((reference: any) => ({
+          url: reference.imageUrl,
+          caption: `Design reference: ${reference.name}`,
+        }));
+
+      // Add lookback slides for visual continuity
+      const lookbackRefs = generatedDataUrls
+        .slice(-LOOKBACK)
+        .map((prev) => ({
+          url: prev.dataUrl,
+          caption: `Previously generated slide ${prev.slideNumber} — maintain visual consistency with this slide's style, colours, typography, and composition`,
+        }));
+
+      const allReferences = [...designRefs, ...lookbackRefs];
 
       const generated = await createRecord('Generated Slides', {
         'Generated Slide Name': `V${targetVersionId.slice(-4)} / Slide ${slide.slideNumber}`,
@@ -129,7 +152,7 @@ export async function generateFromAirtable(versionId?: string, excludeLogos?: bo
         'Layout JSON': buildLayoutJson(slide),
         Model: OPENROUTER_IMAGE_MODEL,
         'Iteration Number': 1,
-        Notes: `AI-first slide generation via ${GENERATION_ENGINE}.`,
+        Notes: `AI-first slide generation via ${GENERATION_ENGINE}. Visual chaining: ${lookbackRefs.length} lookback slide(s).`,
         'Deck Version': [targetVersionId],
         ...(sourceRow ? { 'Slide Row': [sourceRow.id] } : {}),
         'Render Run': [run.id],
@@ -139,16 +162,17 @@ export async function generateFromAirtable(versionId?: string, excludeLogos?: bo
       try {
         imageOutput = await generateImageViaOpenRouter({
           model: OPENROUTER_IMAGE_MODEL,
-          prompt,
+          prompt: prompt + (lookbackRefs.length
+            ? `\n\nVISUAL CHAINING: ${lookbackRefs.length} previously generated slide(s) are included as reference images. Match their visual style, colour palette, typography weight, and composition grid closely. These slides are from the SAME deck — they must look like they belong together.`
+            : ''),
           aspectRatio: '16:9',
-          references: (slide.linkedReferences || [])
-            .filter((reference: any) => reference?.imageUrl)
-            .slice(0, 3)
-            .map((reference: any) => ({
-              url: reference.imageUrl,
-              caption: reference.name,
-            })),
+          references: allReferences,
         });
+
+        // Store the data URL for future slides to reference
+        if (imageOutput.dataUrl) {
+          generatedDataUrls.push({ slideNumber: slide.slideNumber, dataUrl: imageOutput.dataUrl });
+        }
       } catch (error) {
         imageOutput = await renderSlidePreview(slide);
         await patchRecords('Generated Slides', [{

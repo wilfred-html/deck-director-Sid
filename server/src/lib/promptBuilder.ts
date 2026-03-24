@@ -153,6 +153,12 @@ export function buildGenerationPrompt(slide: GenerationSlide, excludeLogos?: boo
       ? (slide.linkedReferences || []).map((reference) => `- ${reference.name}: ${reference.role}; ${reference.mediaWorld}; ${reference.styleNotes}; keywords: ${reference.keywords}`)
       : ['- no linked references supplied; keep the deck premium, strategic, and presentation-native']),
     '',
+    'VISUAL CONTINUITY SYSTEM:',
+    '- If previously generated slides are included as reference images, they are the HIGHEST PRIORITY for visual matching.',
+    '- Match their exact colour palette, typography weight/style, layout grid, and composition approach.',
+    '- Design references set the DNA; previously generated slides set the EXECUTION STANDARD.',
+    '- The output must look like the same designer made every slide in one sitting.',
+    '',
     formula.warningFlags.length ? 'WARNING FLAGS:' : '',
     ...formula.warningFlags.map((item: string) => `- ${item}`),
     formula.warningFlags.length ? '' : '',
