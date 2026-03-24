@@ -27,6 +27,16 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appb1sdK2880A8HYT';
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
 
+// Netlify passes body as Buffer — parse it if express.json() didn't
+app.use((req: any, _res: any, next: any) => {
+  if (req.body && req.body.type === 'Buffer' && Array.isArray(req.body.data)) {
+    try {
+      req.body = JSON.parse(Buffer.from(req.body.data).toString('utf8'));
+    } catch { /* leave as-is */ }
+  }
+  next();
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
