@@ -107,6 +107,7 @@ function App() {
   const [globalEditing, setGlobalEditing] = useState(false);
   const [globalEditPrompt, setGlobalEditPrompt] = useState('');
   const [excludeLogos, setExcludeLogos] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const stageRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const batchFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -240,6 +241,32 @@ function App() {
       setError(err instanceof Error ? err.message : 'Failed to generate');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleExportPptx() {
+    if (!selectedVersion) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/export/pptx?versionId=${encodeURIComponent(selectedVersion)}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: 'Export failed' }));
+        throw new Error(data.error || 'Failed to export');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `deck-${selectedVersion.slice(-6)}.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -471,6 +498,7 @@ function App() {
                 <span>Exclude logos</span>
               </label>
               <button onClick={handleGenerate} disabled={!selectedVersion || generating}>{generating ? 'Generating with Nano Banana 2…' : 'Generate Slides'}</button>
+              <button onClick={handleExportPptx} disabled={!selectedVersion || !presentation?.generatedSlides.length || exporting}>{exporting ? 'Exporting…' : '⬇ Download PPTX'}</button>
               <button onClick={() => setShowBatchImport(true)}>Batch Import</button>
               <span className="status-pill">{busy ? 'Compiling prompt package…' : generating ? 'Generating + writing back to Airtable…' : 'AI-ready from Airtable'}</span>
             </div>

@@ -17,6 +17,7 @@ import { preparePPTXForExtraction } from './pptxIngestion';
 import { bulkRegenerateSlides } from './bulkRegenerate';
 import { batchImportSlides } from './batchImport';
 import { applyGlobalEdit } from './globalEdit';
+import { exportAsPptx } from './exportDeck';
 import { initRenderRun, generateSingleSlide, finalizeRenderRun } from './generateSingle';
 
 const execFileAsync = promisify(execFile);
@@ -447,6 +448,24 @@ app.post('/api/generate/finalize-run', async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to finalize run.' });
+  }
+});
+
+// Export endpoints
+app.get('/api/export/pptx', async (req, res) => {
+  try {
+    const versionId = typeof req.query.versionId === 'string' ? req.query.versionId : '';
+    if (!versionId) return res.status(400).json({ error: 'versionId is required.' });
+    const result = await exportAsPptx(versionId);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    const stream = require('fs').createReadStream(result.filePath);
+    stream.pipe(res);
+    stream.on('end', () => {
+      require('fs').promises.unlink(result.filePath).catch(() => {});
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to export PPTX.' });
   }
 });
 
