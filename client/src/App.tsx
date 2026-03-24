@@ -222,13 +222,18 @@ function App() {
   }
 
   async function handleGenerate() {
-    if (!selectedVersion || !compiled) return;
+    if (!selectedVersion) return;
     setGenerating(true);
     setError(null);
     setGenProgress(null);
     try {
-      const slides = compiled.compiledSlides;
+      // Fetch compiled slides fresh to avoid stale/null state
+      const freshCompiled = await fetch(`${API_BASE}/api/compiler/from-airtable?versionId=${encodeURIComponent(selectedVersion)}`).then((r) => r.json());
+      if (freshCompiled.error) throw new Error(freshCompiled.error);
+      setCompiled(freshCompiled);
+      const slides = freshCompiled.compiledSlides;
       const totalSlides = slides.length;
+      if (!totalSlides) throw new Error('No slides found to generate.');
 
       // 1. Init render run
       const initRes = await fetch(`${API_BASE}/api/generate/init-run`, {
