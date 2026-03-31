@@ -109,17 +109,20 @@ export async function generateSingleSlide(versionId: string, slideNumber: number
 
   // Fetch adjacent generated slides for visual consistency
   const generatedSlidesRes = await fetch(
-    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Generated%20Slides?filterByFormula=AND(FIND("${targetVersionId}",ARRAYJOIN({Deck Version})),{Status}="Succeeded")&sort%5B0%5D%5Bfield%5D=Generated%20Slide%20Name`,
+    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Generated%20Slides?filterByFormula={Status}="Succeeded"&sort%5B0%5D%5Bfield%5D=Generated%20Slide%20Name`,
     { headers: { Authorization: `Bearer ${AIRTABLE_TOKEN}` } }
   );
-  const generatedSlidesData = await generatedSlidesRes.json() as { records: Array<{ id: string; fields: { 'Generated Slide Name': string; 'Preview Image'?: Array<{ url: string }> } }> };
+  const generatedSlidesData = await generatedSlidesRes.json() as { records: Array<{ id: string; fields: { 'Generated Slide Name': string; 'Deck Version'?: string[]; 'Preview Image'?: Array<{ url: string }> } }> };
   const generatedSlidesByNumber = new Map(
-    generatedSlidesData.records.map((rec) => {
-      const match = rec.fields['Generated Slide Name'].match(/Slide (\d+)/);
-      const num = match ? Number(match[1]) : null;
-      const previewUrl = rec.fields['Preview Image']?.[0]?.url;
-      return num && previewUrl ? [num, previewUrl] : null;
-    }).filter(Boolean) as Array<[number, string]>
+    generatedSlidesData.records
+      .filter((rec) => rec.fields['Deck Version']?.includes(targetVersionId)) // Filter client-side
+      .map((rec) => {
+        const match = rec.fields['Generated Slide Name'].match(/Slide (\d+)/);
+        const num = match ? Number(match[1]) : null;
+        const previewUrl = rec.fields['Preview Image']?.[0]?.url;
+        return num && previewUrl ? [num, previewUrl] : null;
+      })
+      .filter(Boolean) as Array<[number, string]>
   );
 
   const adjacentReferences: Array<{ url: string; caption: string }> = [];
