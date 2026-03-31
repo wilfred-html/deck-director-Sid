@@ -287,6 +287,28 @@ textarea {
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 .ref-toggle.active { background: rgba(251, 191, 36, 0.2); border-color: #fbbf24; }
+.regen-toggle {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.9);
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.thumb-wrapper:hover .regen-toggle { opacity: 1; }
+.regen-toggle:hover { background: rgba(59, 130, 246, 0.3); border-color: #3b82f6; color: #60a5fa; }
+.regen-toggle:disabled { cursor: wait; opacity: 0.5; }
 .batch-import-panel {
   margin-top: 12px;
   padding: 14px;

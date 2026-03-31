@@ -108,6 +108,7 @@ function App() {
   const [globalEditPrompt, setGlobalEditPrompt] = useState('');
   const [excludeLogos, setExcludeLogos] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [regeneratingSingle, setRegeneratingSingle] = useState(false);
   const stageRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const batchFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -267,6 +268,45 @@ function App() {
       setError(err instanceof Error ? err.message : 'Failed to export');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleRegenerateSingle() {
+    if (!selectedVersion || !selectedGeneratedSlide) return;
+    setRegeneratingSingle(true);
+    setError(null);
+    try {
+      // Init a render run
+      const initRes = await fetch(`${API_BASE}/api/generate/init-run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId: selectedVersion, runName: `Regen Slide ${selectedGeneratedSlide.slideNumber}` }),
+      });
+      const initData = await initRes.json();
+      if (!initRes.ok) throw new Error(initData.error || 'Failed to init render run');
+
+      // Generate single slide
+      const genRes = await fetch(`${API_BASE}/api/generate/single`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: initData.runId, versionId: selectedVersion, slideNumber: selectedGeneratedSlide.slideNumber }),
+      });
+      const genData = await genRes.json();
+      if (!genRes.ok) throw new Error(genData.error || 'Failed to regenerate slide');
+
+      // Finalize the run
+      await fetch(`${API_BASE}/api/generate/finalize-run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: initData.runId }),
+      });
+
+      // Refresh presentation and select the new slide
+      await refreshPresentation(selectedVersion);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate slide');
+    } finally {
+      setRegeneratingSingle(false);
     }
   }
 
@@ -537,6 +577,7 @@ function App() {
               <button onClick={() => moveSelected(-1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[0]?.id === selectedGeneratedSlide.id}>Previous</button>
               <button onClick={() => moveSelected(1)} disabled={!selectedGeneratedSlide || !presentation || presentation.generatedSlides[presentation.generatedSlides.length - 1]?.id === selectedGeneratedSlide.id}>Next</button>
               <button onClick={toggleFullscreen} disabled={!selectedGeneratedSlide}>{isFullscreen ? 'Exit Full Screen' : 'Full Screen'}</button>
+              <button onClick={handleRegenerateSingle} disabled={!selectedGeneratedSlide || regeneratingSingle}>{regeneratingSingle ? 'Regenerating…' : '🔄 Regen Slide'}</button>
               <button onClick={handleBulkRegenerate} disabled={bulkRegenerating || selectedReferenceSlides.size === 0}>{bulkRegenerating ? 'Regenerating…' : 'Bulk Regenerate'}</button>
             </div>
           </div>
@@ -565,6 +606,46 @@ function App() {
                       title={selectedReferenceSlides.has(slide.id) ? 'Remove as reference' : 'Set as reference'}
                     >
                       {selectedReferenceSlides.has(slide.id) ? '★' : '☆'}
+                    </button>
+                    <button
+                      className="regen-toggle"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (regeneratingSingle) return;
+                        setSelectedGeneratedId(slide.id);
+                        setRegeneratingSingle(true);
+                        setError(null);
+                        try {
+                          const initRes = await fetch(`${API_BASE}/api/generate/init-run`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ versionId: selectedVersion, runName: `Regen Slide ${slide.slideNumber}` }),
+                          });
+                          const initData = await initRes.json();
+                          if (!initRes.ok) throw new Error(initData.error || 'Failed to init');
+                          const genRes = await fetch(`${API_BASE}/api/generate/single`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ runId: initData.runId, versionId: selectedVersion, slideNumber: slide.slideNumber }),
+                          });
+                          const genData = await genRes.json();
+                          if (!genRes.ok) throw new Error(genData.error || 'Failed to regenerate');
+                          await fetch(`${API_BASE}/api/generate/finalize-run`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ runId: initData.runId }),
+                          });
+                          await refreshPresentation(selectedVersion);
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Failed to regenerate slide');
+                        } finally {
+                          setRegeneratingSingle(false);
+                        }
+                      }}
+                      title="Regenerate this slide"
+                      disabled={regeneratingSingle}
+                    >
+                      🔄
                     </button>
                   </div>
                 ))}
