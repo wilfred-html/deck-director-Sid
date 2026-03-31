@@ -104,8 +104,6 @@ export async function generateSingleSlide(versionId: string, slideNumber: number
   );
 
   const sourceRow = slideRowByNumber.get(slide.slideNumber);
-  const prompt = buildGenerationPrompt(slide, excludeLogos);
-  const promptPackage = buildPromptPackage(slide, excludeLogos);
 
   // Fetch adjacent generated slides for visual consistency
   const generatedSlidesRes = await fetch(
@@ -144,6 +142,38 @@ export async function generateSingleSlide(versionId: string, slideNumber: number
     ...(runId ? { 'Render Run': [runId] } : {}),
   });
 
+  // Build prompt with adjacency context baked in
+  const adjacencyPromptLines: string[] = [];
+  if (adjacentReferences.length > 0) {
+    adjacencyPromptLines.push(
+      '',
+      'CRITICAL — ADJACENT SLIDE MATCHING:',
+      'The following reference images include the ACTUAL generated slides immediately before and/or after this slide in the deck.',
+      'These are the HIGHEST PRIORITY references. You MUST match:',
+      '  - The exact background colour/texture (if they use dark bg, you use dark bg)',
+      '  - The same typography style, weight, and colour scheme',
+      '  - The same layout grid density and margin approach',
+      '  - The same overall visual feel and polish level',
+      'The goal is seamless visual continuity — this slide must look like it was designed in the same session as its neighbours.',
+      '',
+    );
+    adjacentReferences.forEach((ref) => {
+      adjacencyPromptLines.push(`Adjacent slide image: ${ref.caption} — MATCH THIS VISUAL STYLE EXACTLY.`);
+    });
+  }
+
+  // Inject adjacency lines into slide data so the prompt builder can see them
+  const augmentedSlide = {
+    ...slide,
+    visualBrief: [
+      slide.visualBrief || '',
+      ...adjacencyPromptLines,
+    ].filter(Boolean).join('\n'),
+  };
+
+  const prompt = buildGenerationPrompt(augmentedSlide, excludeLogos);
+  const promptPackage = buildPromptPackage(augmentedSlide, excludeLogos);
+
   let imageOutput;
   try {
     imageOutput = await generateImageViaOpenRouter({
@@ -151,17 +181,17 @@ export async function generateSingleSlide(versionId: string, slideNumber: number
       prompt,
       aspectRatio: '16:9',
       references: [
-        // Reference style images first
+        // Adjacent generated slides FIRST — highest priority for visual matching
+        ...adjacentReferences,
+        // Then reference style images
         ...(slide.linkedReferences || [])
           .filter((reference: any) => reference?.imageUrl)
-          .slice(0, 2)
+          .slice(0, 3)
           .map((reference: any) => ({
             url: reference.imageUrl,
             caption: reference.name,
           })),
-        // Then adjacent generated slides for visual consistency
-        ...adjacentReferences,
-      ].slice(0, 5), // OpenRouter max 5 references
+      ].slice(0, 5),
     });
   } catch (error) {
     imageOutput = await renderSlidePreview(slide);
