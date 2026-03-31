@@ -109,6 +109,7 @@ function App() {
   const [excludeLogos, setExcludeLogos] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [regeneratingSingle, setRegeneratingSingle] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState<string>('');
   const stageRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const batchFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -226,22 +227,60 @@ function App() {
     if (!selectedVersion) return;
     setGenerating(true);
     setError(null);
+    setGeneratingProgress('');
     try {
-      const response = await fetch(`${API_BASE}/api/generate/from-airtable`, {
+      // First compile to know how many slides we have
+      const compileRes = await fetch(`${API_BASE}/api/compiler/from-airtable?versionId=${encodeURIComponent(selectedVersion)}`);
+      const compileData = await compileRes.json();
+      if (compileData.error) throw new Error(compileData.error);
+      setCompiled(compileData);
+      const totalSlides = compileData.compiledSlides?.length || 0;
+      if (totalSlides === 0) throw new Error('No slides found to generate');
+
+      // Init a render run
+      setGeneratingProgress(`Initializing render run for ${totalSlides} slides...`);
+      const initRes = await fetch(`${API_BASE}/api/generate/init-run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ versionId: selectedVersion, excludeLogos }),
+        body: JSON.stringify({ versionId: selectedVersion, runName: `Full Generate ${new Date().toISOString().slice(0, 16)}` }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to generate');
-      setGenerateResult(data);
-      const refreshedCompiled = await fetch(`${API_BASE}/api/compiler/from-airtable?versionId=${encodeURIComponent(selectedVersion)}`).then((r) => r.json());
-      setCompiled(refreshedCompiled);
+      const initData = await initRes.json();
+      if (!initRes.ok) throw new Error(initData.error || 'Failed to init render run');
+
+      // Generate each slide one at a time
+      let generatedCount = 0;
+      for (const slide of compileData.compiledSlides) {
+        setGeneratingProgress(`Generating slide ${slide.slideNumber} of ${totalSlides}...`);
+        try {
+          const genRes = await fetch(`${API_BASE}/api/generate/single`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ runId: initData.runId, versionId: selectedVersion, slideNumber: slide.slideNumber, excludeLogos }),
+          });
+          await genRes.json();
+          if (genRes.ok) generatedCount++;
+        } catch (slideErr) {
+          console.warn(`Slide ${slide.slideNumber} failed, continuing...`, slideErr);
+        }
+        // Refresh presentation after each slide so filmstrip updates live
+        await refreshPresentation(selectedVersion);
+      }
+
+      // Finalize
+      setGeneratingProgress('Finalizing...');
+      await fetch(`${API_BASE}/api/generate/finalize-run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: initData.runId }),
+      });
+
+      setGenerateResult({ runId: initData.runId, versionId: selectedVersion, generatedCount, model: 'AI', engine: 'nano-banana-2' });
       await refreshPresentation(selectedVersion);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate');
     } finally {
       setGenerating(false);
+      setGeneratingProgress('');
     }
   }
 
@@ -540,7 +579,7 @@ function App() {
               <button onClick={handleGenerate} disabled={!selectedVersion || generating}>{generating ? 'Generating with Nano Banana 2…' : 'Generate Slides'}</button>
               <button onClick={handleExportPptx} disabled={!selectedVersion || !presentation?.generatedSlides.length || exporting}>{exporting ? 'Exporting…' : '⬇ Download PPTX'}</button>
               <button onClick={() => setShowBatchImport(true)}>Batch Import</button>
-              <span className="status-pill">{busy ? 'Compiling prompt package…' : generating ? 'Generating + writing back to Airtable…' : 'AI-ready from Airtable'}</span>
+              <span className="status-pill">{busy ? 'Compiling prompt package…' : generating ? (generatingProgress || 'Generating…') : 'AI-ready from Airtable'}</span>
             </div>
             {showBatchImport ? (
               <div className="batch-import-panel">
