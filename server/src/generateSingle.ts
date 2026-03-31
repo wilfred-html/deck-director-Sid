@@ -107,6 +107,27 @@ export async function generateSingleSlide(versionId: string, slideNumber: number
   const prompt = buildGenerationPrompt(slide, excludeLogos);
   const promptPackage = buildPromptPackage(slide, excludeLogos);
 
+  // Fetch adjacent generated slides for visual consistency
+  const generatedSlidesRes = await fetch(
+    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Generated%20Slides?filterByFormula=AND(FIND("${targetVersionId}",ARRAYJOIN({Deck Version})),{Status}="Succeeded")&sort%5B0%5D%5Bfield%5D=Generated%20Slide%20Name`,
+    { headers: { Authorization: `Bearer ${AIRTABLE_TOKEN}` } }
+  );
+  const generatedSlidesData = await generatedSlidesRes.json() as { records: Array<{ id: string; fields: { 'Generated Slide Name': string; 'Preview Image'?: Array<{ url: string }> } }> };
+  const generatedSlidesByNumber = new Map(
+    generatedSlidesData.records.map((rec) => {
+      const match = rec.fields['Generated Slide Name'].match(/Slide (\d+)/);
+      const num = match ? Number(match[1]) : null;
+      const previewUrl = rec.fields['Preview Image']?.[0]?.url;
+      return num && previewUrl ? [num, previewUrl] : null;
+    }).filter(Boolean) as Array<[number, string]>
+  );
+
+  const adjacentReferences: Array<{ url: string; caption: string }> = [];
+  const prevSlide = generatedSlidesByNumber.get(slide.slideNumber - 1);
+  const nextSlide = generatedSlidesByNumber.get(slide.slideNumber + 1);
+  if (prevSlide) adjacentReferences.push({ url: prevSlide, caption: `Slide ${slide.slideNumber - 1} (previous)` });
+  if (nextSlide) adjacentReferences.push({ url: nextSlide, caption: `Slide ${slide.slideNumber + 1} (next)` });
+
   const generated = await createRecord('Generated Slides', {
     'Generated Slide Name': `V${targetVersionId.slice(-4)} / Slide ${slide.slideNumber}`,
     Status: 'Generating',
@@ -126,20 +147,25 @@ export async function generateSingleSlide(versionId: string, slideNumber: number
       model: OPENROUTER_IMAGE_MODEL,
       prompt,
       aspectRatio: '16:9',
-      references: (slide.linkedReferences || [])
-        .filter((reference: any) => reference?.imageUrl)
-        .slice(0, 3)
-        .map((reference: any) => ({
-          url: reference.imageUrl,
-          caption: reference.name,
-        })),
+      references: [
+        // Reference style images first
+        ...(slide.linkedReferences || [])
+          .filter((reference: any) => reference?.imageUrl)
+          .slice(0, 2)
+          .map((reference: any) => ({
+            url: reference.imageUrl,
+            caption: reference.name,
+          })),
+        // Then adjacent generated slides for visual consistency
+        ...adjacentReferences,
+      ].slice(0, 5), // OpenRouter max 5 references
     });
   } catch (error) {
     imageOutput = await renderSlidePreview(slide);
     await patchRecords('Generated Slides', [{
       id: generated.id,
       fields: {
-        Notes: `AI generation failed; fallback preview rendered. Engine: ${GENERATION_ENGINE}. Error: ${error instanceof Error ? error.message.slice(0, 800) : 'Unknown error'}`,
+        Notes: `AI generation failed; fallback preview rendered. Engine: ${GENERATION_ENGINE}. Adjacent slides: ${adjacentReferences.map(r => r.caption).join(', ') || 'none'}. Error: ${error instanceof Error ? error.message.slice(0, 800) : 'Unknown error'}`,
       },
     }]);
   }
@@ -153,7 +179,7 @@ export async function generateSingleSlide(versionId: string, slideNumber: number
     id: generated.id,
     fields: {
       Status: 'Succeeded',
-      Notes: `Engine: ${GENERATION_ENGINE}\nPrompt package:\n${JSON.stringify(promptPackage, null, 2).slice(0, 90000)}`,
+      Notes: `Engine: ${GENERATION_ENGINE}\nAdjacent slides passed for visual consistency: ${adjacentReferences.map(r => r.caption).join(', ') || 'none'}\nPrompt package:\n${JSON.stringify(promptPackage, null, 2).slice(0, 90000)}`,
     },
   }]);
 
